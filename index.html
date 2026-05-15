@@ -27,6 +27,18 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        
+        /* Reglas específicas para la impresión del comprobante */
+        @media print {
+            .no-print { display: none !important; }
+            body { background-color: white !important; }
+            .print-area { 
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: white; z-index: 9999; padding: 20px;
+                display: flex; flex-direction: column;
+            }
+            .print-shadow-none { box-shadow: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -45,6 +57,7 @@
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [filterStatus, setFilterStatus] = useState('todos');
+            const [receiptClient, setReceiptClient] = useState(null); // Nuevo estado para el comprobante
             
             const [formData, setFormData] = useState({
                 name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia'
@@ -87,6 +100,10 @@
                 setFormData({ name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia' });
             };
 
+            const handlePrint = () => {
+                window.print();
+            };
+
             const filteredClients = useMemo(() => {
                 return clients.filter(client => {
                     const nameMatch = client.name ? client.name.toLowerCase().includes(searchTerm.toLowerCase()) : false;
@@ -104,9 +121,12 @@
                 };
             }, [clients]);
 
+            const todayDate = new Date().toLocaleDateString('es-CO');
+
             return (
                 <div className="min-h-screen flex flex-col max-w-md mx-auto bg-slate-50 shadow-2xl relative">
-                    <header className="bg-indigo-600 text-white p-6 rounded-b-[2rem] shadow-lg sticky top-0 z-20">
+                    {/* Header: Se oculta al imprimir */}
+                    <header className="no-print bg-indigo-600 text-white p-6 rounded-b-[2rem] shadow-lg sticky top-0 z-20">
                         <div className="flex justify-between items-center mb-4">
                             <div>
                                 <h1 className="text-2xl font-bold tracking-tight flex items-center">
@@ -130,7 +150,8 @@
                         </div>
                     </header>
 
-                    <main className="flex-1 px-4 py-6 space-y-6 overflow-y-auto pb-32">
+                    {/* Main Content: Se oculta al imprimir */}
+                    <main className="no-print flex-1 px-4 py-6 space-y-6 overflow-y-auto pb-32">
                         <div className="space-y-3">
                             <div className="relative">
                                 <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
@@ -188,9 +209,13 @@
                                     <div className="flex justify-between items-center pt-3 border-t border-slate-50">
                                         <div className="flex items-center text-indigo-600 font-bold">
                                             <i className="fa-solid fa-dollar-sign mr-1"></i>
-                                            {Number(client.price).toLocaleString()}
+                                            {Number(client.price).toLocaleString('es-CO')}
                                         </div>
+                                        {/* Nuevo grupo de botones con el de imprimir */}
                                         <div className="flex gap-2">
+                                            <button onClick={() => setReceiptClient(client)} className="w-10 h-10 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl" title="Ver Comprobante">
+                                                <i className="fa-solid fa-file-invoice text-sm"></i>
+                                            </button>
                                             <button onClick={() => editClient(client)} className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-600 rounded-xl">
                                                 <i className="fa-solid fa-pen text-sm"></i>
                                             </button>
@@ -204,7 +229,8 @@
                         </div>
                     </main>
 
-                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
+                    {/* Botón flotante: Se oculta al imprimir */}
+                    <div className="no-print fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
                         <button 
                             onClick={() => setIsFormOpen(true)}
                             className="bg-indigo-600 text-white w-full py-4 rounded-2xl shadow-xl shadow-indigo-200 font-bold text-lg flex items-center justify-center active:scale-95 transition-transform"
@@ -213,8 +239,9 @@
                         </button>
                     </div>
 
+                    {/* Modal del Formulario */}
                     {isFormOpen && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
                             <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center mb-8">
                                     <h2 className="text-2xl font-black text-slate-800">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
@@ -247,7 +274,75 @@
                             </div>
                         </div>
                     )}
-                    <div className="safe-area-bottom h-20"></div>
+
+                    {/* Modal del Comprobante (Este es el que se imprime) */}
+                    {receiptClient && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print-area">
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl print-shadow-none print:w-full print:max-w-none print:p-0">
+                                
+                                <div className="text-center border-b border-slate-100 pb-6 mb-6">
+                                    <div className="no-print w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <i className="fa-solid fa-receipt text-2xl"></i>
+                                    </div>
+                                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Estado de Cuenta</h2>
+                                    <p className="text-slate-400 text-sm mt-1">{todayDate}</p>
+                                </div>
+
+                                <div className="space-y-4 mb-8">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-slate-400 text-sm">Cliente</span>
+                                        <span className="font-bold text-slate-700 text-right">{receiptClient.name}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-slate-400 text-sm">Identificación (IP)</span>
+                                        <span className="font-medium text-slate-700">{receiptClient.ip}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-slate-400 text-sm">Plan Contratado</span>
+                                        <span className="font-medium text-slate-700">{receiptClient.plan}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-slate-400 text-sm">Mensualidad</span>
+                                        <span className="font-medium text-slate-700">${Number(receiptClient.price).toLocaleString('es-CO')}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center border-t border-slate-100 pt-4">
+                                        <span className="text-slate-400 text-sm">Estado Actual</span>
+                                        <span className={`font-bold ${
+                                            receiptClient.status === 'aldia' ? 'text-emerald-500' : 
+                                            receiptClient.status === 'pendiente' ? 'text-amber-500' : 'text-rose-500'
+                                        }`}>
+                                            {receiptClient.status === 'aldia' ? '✅ AL DÍA' : receiptClient.status === 'pendiente' ? '⏳ PENDIENTE' : '❌ CORTADO'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-50 p-6 rounded-2xl print:bg-transparent print:border print:border-slate-200 print:p-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-slate-500 font-bold uppercase text-sm">Saldo a Pagar</span>
+                                        <span className="text-2xl font-black text-indigo-600">
+                                            ${receiptClient.status === 'aldia' ? '0' : Number(receiptClient.price).toLocaleString('es-CO')}
+                                        </span>
+                                    </div>
+                                    {receiptClient.status === 'aldia' && (
+                                        <div className="text-center text-xs font-medium text-emerald-600 bg-emerald-100 py-2 rounded-lg mt-3 print:border print:border-emerald-200">
+                                            Servicio cubierto. Próximo corte: {receiptClient.dueDate}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="no-print flex gap-3 mt-8">
+                                    <button onClick={() => setReceiptClient(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-transform">
+                                        Cerrar
+                                    </button>
+                                    <button onClick={handlePrint} className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform flex items-center justify-center">
+                                        <i className="fa-solid fa-print mr-2"></i> Imprimir
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="no-print safe-area-bottom h-20"></div>
                 </div>
             );
         }
