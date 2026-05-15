@@ -6,7 +6,7 @@
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>WISP Control</title>
+    <title>WISP Control Cloud</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -16,6 +16,9 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -28,7 +31,6 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
         
-        /* Reglas específicas para la impresión del comprobante */
         @media print {
             .no-print { display: none !important; }
             body { background-color: white !important; }
@@ -45,46 +47,91 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // ---------------------------------------------------------
+        // 1. CONFIGURACIÓN DE FIREBASE (¡Tus datos ya están aquí!)
+        // ---------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyCNkQiElGE7ud9EIht4Li8pg6DBSRuorW8",
+            authDomain: "wisp-la-dorada.firebaseapp.com",
+            projectId: "wisp-la-dorada",
+            storageBucket: "wisp-la-dorada.firebasestorage.app",
+            messagingSenderId: "191768568916",
+            appId: "1:191768568916:web:2a538b5ac3bdc36a8df9c1"
+        };
+
+        // Inicializamos Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+        // ---------------------------------------------------------
+
         const { useState, useEffect, useMemo } = React;
 
         function App() {
-            const [clients, setClients] = useState(() => {
-                const saved = localStorage.getItem('wisp_data_v1');
-                return saved ? JSON.parse(saved) : [];
-            });
-
+            const [clients, setClients] = useState([]);
+            const [loading, setLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState('');
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [filterStatus, setFilterStatus] = useState('todos');
-            const [receiptClient, setReceiptClient] = useState(null); // Nuevo estado para el comprobante
+            const [receiptClient, setReceiptClient] = useState(null);
             
             const [formData, setFormData] = useState({
                 name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia'
             });
 
+            // 2. OBTENER DATOS DE FIREBASE EN TIEMPO REAL
             useEffect(() => {
-                localStorage.setItem('wisp_data_v1', JSON.stringify(clients));
-            }, [clients]);
+                const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
+                    const clientsData = [];
+                    querySnapshot.forEach((doc) => {
+                        clientsData.push({ id: doc.id, ...doc.data() });
+                    });
+                    setClients(clientsData.sort((a, b) => b.createdAt - a.createdAt));
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Error al conectar con Firebase: ", error);
+                    alert("Error al conectar con la base de datos.");
+                    setLoading(false);
+                });
+
+                return () => unsubscribe();
+            }, []);
 
             const handleInputChange = (e) => {
                 const { name, value } = e.target;
                 setFormData(prev => ({ ...prev, [name]: value }));
             };
 
-            const handleSubmit = (e) => {
+            // 3. GUARDAR O EDITAR EN FIREBASE
+            const handleSubmit = async (e) => {
                 e.preventDefault();
-                if (editingId) {
-                    setClients(clients.map(c => c.id === editingId ? { ...formData, id: editingId } : c));
-                } else {
-                    setClients([{ ...formData, id: Date.now() }, ...clients]);
+                try {
+                    if (editingId) {
+                        await db.collection("clientes").doc(editingId).update(formData);
+                    } else {
+                        await db.collection("clientes").add({
+                            ...formData,
+                            createdAt: Date.now()
+                        });
+                    }
+                    closeForm();
+                } catch (error) {
+                    console.error("Error guardando documento: ", error);
+                    alert("Error al guardar el cliente. Verifica las reglas de Firebase.");
                 }
-                closeForm();
             };
 
-            const deleteClient = (id) => {
-                if (window.confirm('¿Estás seguro de eliminar este registro?')) {
-                    setClients(clients.filter(c => c.id !== id));
+            // 4. ELIMINAR EN FIREBASE
+            const deleteClient = async (id) => {
+                if (window.confirm('¿Estás seguro de eliminar este registro en la nube?')) {
+                    try {
+                        await db.collection("clientes").doc(id).delete();
+                    } catch (error) {
+                        console.error("Error eliminando documento: ", error);
+                        alert("Error al eliminar el cliente.");
+                    }
                 }
             };
 
@@ -123,9 +170,17 @@
 
             const todayDate = new Date().toLocaleDateString('es-CO');
 
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-indigo-600">
+                        <i className="fa-solid fa-circle-notch fa-spin text-4xl mb-4"></i>
+                        <p className="font-bold animate-pulse">Conectando a la nube...</p>
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen flex flex-col max-w-md mx-auto bg-slate-50 shadow-2xl relative">
-                    {/* Header: Se oculta al imprimir */}
                     <header className="no-print bg-indigo-600 text-white p-6 rounded-b-[2rem] shadow-lg sticky top-0 z-20">
                         <div className="flex justify-between items-center mb-4">
                             <div>
@@ -134,8 +189,9 @@
                                     WISP Control
                                 </h1>
                             </div>
-                            <div className="bg-indigo-500/40 w-10 h-10 flex items-center justify-center rounded-full">
+                            <div className="bg-indigo-500/40 w-10 h-10 flex items-center justify-center rounded-full relative">
                                 <i className="fa-solid fa-cloud text-indigo-100"></i>
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-indigo-600"></span>
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3 mt-2">
@@ -150,7 +206,6 @@
                         </div>
                     </header>
 
-                    {/* Main Content: Se oculta al imprimir */}
                     <main className="no-print flex-1 px-4 py-6 space-y-6 overflow-y-auto pb-32">
                         <div className="space-y-3">
                             <div className="relative">
@@ -181,6 +236,14 @@
                         </div>
 
                         <div className="space-y-4">
+                            {filteredClients.length === 0 && (
+                                <div className="text-center py-10 text-slate-400">
+                                    <i className="fa-solid fa-cloud text-4xl mb-3 opacity-50"></i>
+                                    <p>Base de datos lista.</p>
+                                    <p className="text-sm">Agrega tu primer cliente.</p>
+                                </div>
+                            )}
+                            
                             {filteredClients.map(client => (
                                 <div key={client.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 relative overflow-hidden group">
                                     <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
@@ -211,7 +274,6 @@
                                             <i className="fa-solid fa-dollar-sign mr-1"></i>
                                             {Number(client.price).toLocaleString('es-CO')}
                                         </div>
-                                        {/* Nuevo grupo de botones con el de imprimir */}
                                         <div className="flex gap-2">
                                             <button onClick={() => setReceiptClient(client)} className="w-10 h-10 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl" title="Ver Comprobante">
                                                 <i className="fa-solid fa-file-invoice text-sm"></i>
@@ -229,7 +291,6 @@
                         </div>
                     </main>
 
-                    {/* Botón flotante: Se oculta al imprimir */}
                     <div className="no-print fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
                         <button 
                             onClick={() => setIsFormOpen(true)}
@@ -239,7 +300,6 @@
                         </button>
                     </div>
 
-                    {/* Modal del Formulario */}
                     {isFormOpen && (
                         <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
                             <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -275,11 +335,9 @@
                         </div>
                     )}
 
-                    {/* Modal del Comprobante (Este es el que se imprime) */}
                     {receiptClient && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print-area">
                             <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl print-shadow-none print:w-full print:max-w-none print:p-0">
-                                
                                 <div className="text-center border-b border-slate-100 pb-6 mb-6">
                                     <div className="no-print w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
                                         <i className="fa-solid fa-receipt text-2xl"></i>
@@ -287,7 +345,6 @@
                                     <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Estado de Cuenta</h2>
                                     <p className="text-slate-400 text-sm mt-1">{todayDate}</p>
                                 </div>
-
                                 <div className="space-y-4 mb-8">
                                     <div className="flex justify-between items-center">
                                         <span className="text-slate-400 text-sm">Cliente</span>
@@ -315,7 +372,6 @@
                                         </span>
                                     </div>
                                 </div>
-
                                 <div className="bg-slate-50 p-6 rounded-2xl print:bg-transparent print:border print:border-slate-200 print:p-4">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-slate-500 font-bold uppercase text-sm">Saldo a Pagar</span>
@@ -329,7 +385,6 @@
                                         </div>
                                     )}
                                 </div>
-
                                 <div className="no-print flex gap-3 mt-8">
                                     <button onClick={() => setReceiptClient(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-transform">
                                         Cerrar
@@ -341,7 +396,6 @@
                             </div>
                         </div>
                     )}
-
                     <div className="no-print safe-area-bottom h-20"></div>
                 </div>
             );
