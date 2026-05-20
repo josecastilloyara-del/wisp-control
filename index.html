@@ -9,12 +9,10 @@
     <title>WISP Control Cloud</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -74,19 +72,20 @@
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [filterStatus, setFilterStatus] = useState('todos');
+            
             const [receiptClient, setReceiptClient] = useState(null);
+            const [historyClient, setHistoryClient] = useState(null); // Nuevo estado para ver historial
             
             const [formData, setFormData] = useState({
-                name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia'
+                name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
             });
 
-            // 2. OBTENER DATOS Y EJECUTAR MOTOR AUTOMÁTICO DE FECHAS
+            // OBTENER DATOS Y EJECUTAR MOTOR AUTOMÁTICO DE FECHAS
             useEffect(() => {
                 const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
                     const clientsData = [];
-                    const updatesToFirebase = []; // Guarda los clientes que caducaron para actualizarlos
+                    const updatesToFirebase = []; 
 
-                    // Obtener la fecha local de hoy en formato YYYY-MM-DD
                     const today = new Date();
                     const yyyy = today.getFullYear();
                     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -97,28 +96,25 @@
                         const data = doc.data();
                         let currentStatus = data.status;
 
-                        // LÓGICA AUTOMÁTICA: Si está al día, pero la fecha de corte es hoy o ya pasó
+                        // Si está al día, pero la fecha de corte es hoy o ya pasó, pasa a pendiente
                         if (currentStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
-                            currentStatus = 'pendiente'; // Cambia el estado
+                            currentStatus = 'pendiente';
                             updatesToFirebase.push({ id: doc.id, newStatus: currentStatus });
                         }
 
-                        clientsData.push({ id: doc.id, ...data, status: currentStatus });
+                        clientsData.push({ id: doc.id, ...data, status: currentStatus, history: data.history || [] });
                     });
 
-                    // Ordenamos los clientes y actualizamos la pantalla
                     setClients(clientsData.sort((a, b) => b.createdAt - a.createdAt));
                     setLoading(false);
 
-                    // Enviamos las actualizaciones a Firebase silenciosamente en segundo plano
                     updatesToFirebase.forEach(update => {
                         db.collection("clientes").doc(update.id).update({ status: update.newStatus })
-                          .catch(err => console.error("Error auto-actualizando estado: ", err));
+                          .catch(err => console.error("Error auto-actualizando: ", err));
                     });
 
                 }, (error) => {
-                    console.error("Error al conectar con Firebase: ", error);
-                    alert("Error al conectar con la base de datos.");
+                    console.error("Error Firebase: ", error);
                     setLoading(false);
                 });
 
@@ -138,24 +134,56 @@
                     } else {
                         await db.collection("clientes").add({
                             ...formData,
+                            history: [], // Inicializa el historial vacío al crear
                             createdAt: Date.now()
                         });
                     }
                     closeForm();
                 } catch (error) {
                     console.error("Error guardando documento: ", error);
-                    alert("Error al guardar el cliente. Verifica las reglas de Firebase.");
+                    alert("Error al guardar el cliente.");
+                }
+            };
+
+            // NUEVA FUNCIÓN: RENOVAR MES Y REGISTRAR EN HISTORIAL
+            const handleRenew = async (client) => {
+                const confirmMsg = `¿Registrar pago de $${Number(client.price).toLocaleString('es-CO')} y renovar 1 mes de servicio a ${client.name}?`;
+                if (window.confirm(confirmMsg)) {
+                    try {
+                        // Calcula la fecha exacta del mes siguiente
+                        const [y, m, d] = client.dueDate.split('-');
+                        const nextMonth = new Date(y, parseInt(m), d); // Mes adelantado por 1
+                        const newY = nextMonth.getFullYear();
+                        const newM = String(nextMonth.getMonth() + 1).padStart(2, '0');
+                        const newD = String(nextMonth.getDate()).padStart(2, '0');
+                        const newDueDate = `${newY}-${newM}-${newD}`;
+
+                        // Crea el registro del historial
+                        const historyEntry = {
+                            date: new Date().toLocaleDateString('es-CO'), // Fecha en la que pagó
+                            amount: client.price,
+                            periodCovered: client.dueDate // El mes que estaba pendiente
+                        };
+
+                        const updatedHistory = [...(client.history || []), historyEntry];
+
+                        // Actualiza en Firebase
+                        await db.collection("clientes").doc(client.id).update({
+                            dueDate: newDueDate,
+                            status: 'aldia',
+                            history: updatedHistory
+                        });
+
+                    } catch (error) {
+                        console.error("Error al renovar: ", error);
+                        alert("Hubo un error al registrar el pago.");
+                    }
                 }
             };
 
             const deleteClient = async (id) => {
-                if (window.confirm('¿Estás seguro de eliminar este registro en la nube?')) {
-                    try {
-                        await db.collection("clientes").doc(id).delete();
-                    } catch (error) {
-                        console.error("Error eliminando documento: ", error);
-                        alert("Error al eliminar el cliente.");
-                    }
+                if (window.confirm('¿Eliminar este registro en la nube de forma permanente?')) {
+                    await db.collection("clientes").doc(id).delete();
                 }
             };
 
@@ -168,12 +196,10 @@
             const closeForm = () => {
                 setIsFormOpen(false);
                 setEditingId(null);
-                setFormData({ name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia' });
+                setFormData({ name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: [] });
             };
 
-            const handlePrint = () => {
-                window.print();
-            };
+            const handlePrint = () => window.print();
 
             const filteredClients = useMemo(() => {
                 return clients.filter(client => {
@@ -188,7 +214,7 @@
             const stats = useMemo(() => {
                 return {
                     total: clients.length,
-                    pendientes: clients.filter(c => c.status === 'pendiente').length
+                    pendientes: clients.filter(c => c.status === 'pendiente' || c.status === 'cortado').length
                 };
             }, [clients]);
 
@@ -224,7 +250,7 @@
                                 <div className="text-xl font-bold">{stats.total}</div>
                             </div>
                             <div className="bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-orange-200">
-                                <span className="text-[10px] uppercase font-bold text-indigo-200 block mb-1">Pendientes</span>
+                                <span className="text-[10px] uppercase font-bold text-indigo-200 block mb-1">Por Cobrar</span>
                                 <div className="text-xl font-bold">{stats.pendientes}</div>
                             </div>
                         </div>
@@ -264,7 +290,6 @@
                                 <div className="text-center py-10 text-slate-400">
                                     <i className="fa-solid fa-cloud text-4xl mb-3 opacity-50"></i>
                                     <p>Base de datos lista.</p>
-                                    <p className="text-sm">Agrega tu primer cliente.</p>
                                 </div>
                             )}
                             
@@ -289,7 +314,7 @@
                                             <div className="text-slate-700 font-mono font-medium text-sm text-center">{client.ip}</div>
                                         </div>
                                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Fecha Corte</div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Próximo Corte</div>
                                             <div className="text-slate-700 font-medium text-sm text-center">{client.dueDate}</div>
                                         </div>
                                     </div>
@@ -298,14 +323,20 @@
                                             <i className="fa-solid fa-dollar-sign mr-1"></i>
                                             {Number(client.price).toLocaleString('es-CO')}
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setReceiptClient(client)} className="w-10 h-10 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl" title="Ver Comprobante">
+                                        <div className="flex flex-wrap gap-1.5 justify-end">
+                                            <button onClick={() => handleRenew(client)} className="w-9 h-9 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-xl" title="Registrar Pago y Renovar">
+                                                <i className="fa-solid fa-hand-holding-dollar text-sm"></i>
+                                            </button>
+                                            <button onClick={() => setHistoryClient(client)} className="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl" title="Ver Historial">
+                                                <i className="fa-solid fa-clock-rotate-left text-sm"></i>
+                                            </button>
+                                            <button onClick={() => setReceiptClient(client)} className="w-9 h-9 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl" title="Ver Comprobante">
                                                 <i className="fa-solid fa-file-invoice text-sm"></i>
                                             </button>
-                                            <button onClick={() => editClient(client)} className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-600 rounded-xl">
+                                            <button onClick={() => editClient(client)} className="w-9 h-9 flex items-center justify-center bg-slate-100 text-slate-600 rounded-xl" title="Editar">
                                                 <i className="fa-solid fa-pen text-sm"></i>
                                             </button>
-                                            <button onClick={() => deleteClient(client.id)} className="w-10 h-10 flex items-center justify-center bg-slate-100 text-rose-400 rounded-xl">
+                                            <button onClick={() => deleteClient(client.id)} className="w-9 h-9 flex items-center justify-center bg-rose-50 text-rose-500 rounded-xl" title="Borrar">
                                                 <i className="fa-solid fa-trash text-sm"></i>
                                             </button>
                                         </div>
@@ -324,6 +355,7 @@
                         </button>
                     </div>
 
+                    {/* MODAL FORMULARIO */}
                     {isFormOpen && (
                         <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
                             <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -359,6 +391,46 @@
                         </div>
                     )}
 
+                    {/* MODAL HISTORIAL DE PAGOS */}
+                    {historyClient && (
+                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl max-h-[80vh] flex flex-col">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-black text-slate-800">Historial Pagos</h2>
+                                    <button onClick={() => setHistoryClient(null)} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 shrink-0">
+                                        <i className="fa-solid fa-xmark text-lg"></i>
+                                    </button>
+                                </div>
+                                <p className="text-slate-500 text-sm mb-4 font-bold">{historyClient.name}</p>
+                                
+                                <div className="overflow-y-auto flex-1 pr-2 no-scrollbar">
+                                    {(!historyClient.history || historyClient.history.length === 0) ? (
+                                        <div className="text-center py-8 text-slate-400">
+                                            <i className="fa-solid fa-folder-open text-3xl mb-3 opacity-30"></i>
+                                            <p className="text-sm">No hay pagos registrados aún.</p>
+                                        </div>
+                                    ) : (
+                                        <ul className="space-y-3">
+                                            {/* Invertimos el array para que el más reciente salga arriba */}
+                                            {[...historyClient.history].reverse().map((h, index) => (
+                                                <li key={index} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                                    <div>
+                                                        <p className="font-bold text-slate-700 text-sm">Corte: {h.periodCovered}</p>
+                                                        <p className="text-xs text-slate-400 mt-0.5">Pagado: {h.date}</p>
+                                                    </div>
+                                                    <span className="text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded-lg">
+                                                        +${Number(h.amount).toLocaleString('es-CO')}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL RECIBO */}
                     {receiptClient && (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print-area">
                             <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl print-shadow-none print:w-full print:max-w-none print:p-0">
@@ -381,10 +453,6 @@
                                     <div className="flex justify-between items-center">
                                         <span className="text-slate-400 text-sm">Plan Contratado</span>
                                         <span className="font-medium text-slate-700">{receiptClient.plan}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Mensualidad</span>
-                                        <span className="font-medium text-slate-700">${Number(receiptClient.price).toLocaleString('es-CO')}</span>
                                     </div>
                                     <div className="flex justify-between items-center border-t border-slate-100 pt-4">
                                         <span className="text-slate-400 text-sm">Estado Actual</span>
