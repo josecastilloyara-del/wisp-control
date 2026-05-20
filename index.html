@@ -80,7 +80,6 @@
                 name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
             });
 
-            // OBTENER DATOS Y EJECUTAR MOTOR AUTOMÁTICO DE FECHAS
             useEffect(() => {
                 const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
                     const clientsData = [];
@@ -94,18 +93,24 @@
 
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        let currentStatus = data.status;
+                        let currentStatus = data.status || 'aldia';
 
-                        // Si está al día, pero la fecha de corte es hoy o ya pasó, pasa a pendiente
+                        // LOGICA AUTO-ESTADO (Segura contra fechas vacías)
                         if (currentStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
                             currentStatus = 'pendiente';
                             updatesToFirebase.push({ id: doc.id, newStatus: currentStatus });
                         }
 
-                        clientsData.push({ id: doc.id, ...data, status: currentStatus, history: data.history || [] });
+                        clientsData.push({ 
+                            id: doc.id, 
+                            ...data, 
+                            status: currentStatus, 
+                            history: data.history || [] 
+                        });
                     });
 
-                    setClients(clientsData.sort((a, b) => b.createdAt - a.createdAt));
+                    // ORDENAMIENTO SEGURO (Previene colapsos si falta createdAt)
+                    setClients(clientsData.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
                     setLoading(false);
 
                     updatesToFirebase.forEach(update => {
@@ -145,9 +150,14 @@
                 }
             };
 
-            // RENOVAR MES Y REGISTRAR EN HISTORIAL
             const handleRenew = async (client) => {
-                const confirmMsg = `¿Registrar pago de $${Number(client.price).toLocaleString('es-CO')} y renovar 1 mes de servicio a ${client.name}?`;
+                if (!client.dueDate) {
+                    return alert("El cliente no tiene una fecha de corte registrada para renovar.");
+                }
+
+                const priceToPay = client.price ? Number(client.price) : 0;
+                const confirmMsg = `¿Registrar pago de $${priceToPay.toLocaleString('es-CO')} y renovar 1 mes de servicio a ${client.name || 'este cliente'}?`;
+                
                 if (window.confirm(confirmMsg)) {
                     try {
                         const [y, m, d] = client.dueDate.split('-');
@@ -159,7 +169,7 @@
 
                         const historyEntry = {
                             date: new Date().toLocaleDateString('es-CO'),
-                            amount: client.price,
+                            amount: priceToPay,
                             periodCovered: client.dueDate 
                         };
 
@@ -178,20 +188,21 @@
                 }
             };
 
-            // ENVIAR NOTIFICACIÓN POR WHATSAPP
             const handleWhatsApp = (client) => {
-                // Limpiar el número de teléfono (quitar espacios o guiones)
-                let phone = client.phone.replace(/\D/g, '');
+                // EXTRACCIÓN SEGURA DE TELÉFONO
+                let phone = (client.phone || '').replace(/\D/g, '');
                 
-                // Si el número tiene 10 dígitos y empieza por 3 (típico en Colombia), le agregamos el +57
+                if (!phone) {
+                    return alert("Este cliente no tiene un número de teléfono registrado.");
+                }
+
                 if (phone.length === 10 && phone.startsWith('3')) {
                     phone = '57' + phone;
                 }
 
-                // Generar el mensaje de cobro
-                const message = `Hola ${client.name}, te recordamos que tu mes de servicio de internet se encuentra pendiente de pago desde el ${client.dueDate}. El saldo a cancelar es de $${Number(client.price).toLocaleString('es-CO')}. Por favor realiza el pago para evitar la suspensión del servicio. ¡Gracias!`;
+                const priceValue = client.price ? Number(client.price) : 0;
+                const message = `Hola ${client.name || 'estimado cliente'}, te recordamos que tu mes de servicio de internet se encuentra pendiente de pago desde el ${client.dueDate || 'día de corte'}. El saldo a cancelar es de $${priceValue.toLocaleString('es-CO')}. Por favor realiza el pago para evitar la suspensión del servicio. ¡Gracias!`;
                 
-                // Crear el enlace y abrir WhatsApp
                 const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
                 window.open(url, '_blank');
             };
@@ -203,7 +214,16 @@
             };
 
             const editClient = (client) => {
-                setFormData(client);
+                setFormData({
+                    name: client.name || '',
+                    phone: client.phone || '',
+                    ip: client.ip || '',
+                    plan: client.plan || '',
+                    price: client.price || '',
+                    dueDate: client.dueDate || '',
+                    status: client.status || 'aldia',
+                    history: client.history || []
+                });
                 setEditingId(client.id);
                 setIsFormOpen(true);
             };
@@ -218,8 +238,10 @@
 
             const filteredClients = useMemo(() => {
                 return clients.filter(client => {
-                    const nameMatch = client.name ? client.name.toLowerCase().includes(searchTerm.toLowerCase()) : false;
-                    const ipMatch = client.ip ? client.ip.includes(searchTerm) : false;
+                    const safeName = client.name || '';
+                    const safeIp = client.ip || '';
+                    const nameMatch = safeName.toLowerCase().includes(searchTerm.toLowerCase());
+                    const ipMatch = safeIp.includes(searchTerm);
                     const matchesSearch = nameMatch || ipMatch;
                     const matchesFilter = filterStatus === 'todos' || client.status === filterStatus;
                     return matchesSearch && matchesFilter;
@@ -316,17 +338,76 @@
                                     }`}></div>
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name}</h3>
+                                            <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name || 'Sin Nombre'}</h3>
                                             <div className="flex items-center text-slate-400 text-xs mt-1">
                                                 <i className="fa-solid fa-phone mr-1.5 text-[10px]"></i>
-                                                {client.phone}
+                                                {client.phone || 'Sin Teléfono'}
                                             </div>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 mb-4">
                                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
                                             <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">IP Antena</div>
-                                            <div className="text-slate-700 font-mono font-medium text-sm text-center">{client.ip}</div>
+                                            <div className="text-slate-700 font-mono font-medium text-sm text-center">{client.ip || 'N/A'}</div>
                                         </div>
                                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                                            <div className="text-[10px
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Próximo Corte</div>
+                                            <div className="text-slate-700 font-medium text-sm text-center">{client.dueDate || 'N/A'}</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center pt-3 border-t border-slate-50">
+                                        <div className="flex items-center text-indigo-600 font-bold">
+                                            <i className="fa-solid fa-dollar-sign mr-1"></i>
+                                            {client.price ? Number(client.price).toLocaleString('es-CO') : '0'}
+                                        </div>
+                                        <div className="flex flex-wrap gap-1.5 justify-end">
+                                            {(client.status === 'pendiente' || client.status === 'cortado') && (
+                                                <button onClick={() => handleWhatsApp(client)} className="w-9 h-9 flex items-center justify-center bg-green-50 text-green-600 rounded-xl" title="Notificar por WhatsApp">
+                                                    <i className="fa-brands fa-whatsapp text-base"></i>
+                                                </button>
+                                            )}
+                                            
+                                            <button onClick={() => handleRenew(client)} className="w-9 h-9 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-xl" title="Registrar Pago y Renovar">
+                                                <i className="fa-solid fa-hand-holding-dollar text-sm"></i>
+                                            </button>
+                                            <button onClick={() => setHistoryClient(client)} className="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl" title="Ver Historial">
+                                                <i className="fa-solid fa-clock-rotate-left text-sm"></i>
+                                            </button>
+                                            <button onClick={() => setReceiptClient(client)} className="w-9 h-9 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl" title="Ver Comprobante">
+                                                <i className="fa-solid fa-file-invoice text-sm"></i>
+                                            </button>
+                                            <button onClick={() => editClient(client)} className="w-9 h-9 flex items-center justify-center bg-slate-100 text-slate-600 rounded-xl" title="Editar">
+                                                <i className="fa-solid fa-pen text-sm"></i>
+                                            </button>
+                                            <button onClick={() => deleteClient(client.id)} className="w-9 h-9 flex items-center justify-center bg-rose-50 text-rose-500 rounded-xl" title="Borrar">
+                                                <i className="fa-solid fa-trash text-sm"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </main>
+
+                    <div className="no-print fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
+                        <button 
+                            onClick={() => setIsFormOpen(true)}
+                            className="bg-indigo-600 text-white w-full py-4 rounded-2xl shadow-xl shadow-indigo-200 font-bold text-lg flex items-center justify-center active:scale-95 transition-transform"
+                        >
+                            <i className="fa-solid fa-plus mr-3"></i> Nuevo Cliente
+                        </button>
+                    </div>
+
+                    {isFormOpen && (
+                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
+                            <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-center mb-8">
+                                    <h2 className="text-2xl font-black text-slate-800">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
+                                    <button onClick={closeForm} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400">
+                                        <i className="fa-solid fa-xmark text-lg"></i>
+                                    </button>
+                                </div>
+                                <form onSubmit={handleSubmit} className="space-y-5">
+                                    <input required name="name" value={formData.name} onChange={handleInputChange} placeholder="Nombre del cliente" type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <input required name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Teléfono" type="tel" className="w-full bg-slate-50 border-2 border-slate-100 rounded
