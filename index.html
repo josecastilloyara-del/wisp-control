@@ -74,7 +74,7 @@
             const [filterStatus, setFilterStatus] = useState('todos');
             
             const [receiptClient, setReceiptClient] = useState(null);
-            const [historyClient, setHistoryClient] = useState(null); // Nuevo estado para ver historial
+            const [historyClient, setHistoryClient] = useState(null);
             
             const [formData, setFormData] = useState({
                 name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
@@ -134,7 +134,7 @@
                     } else {
                         await db.collection("clientes").add({
                             ...formData,
-                            history: [], // Inicializa el historial vacío al crear
+                            history: [],
                             createdAt: Date.now()
                         });
                     }
@@ -145,29 +145,26 @@
                 }
             };
 
-            // NUEVA FUNCIÓN: RENOVAR MES Y REGISTRAR EN HISTORIAL
+            // RENOVAR MES Y REGISTRAR EN HISTORIAL
             const handleRenew = async (client) => {
                 const confirmMsg = `¿Registrar pago de $${Number(client.price).toLocaleString('es-CO')} y renovar 1 mes de servicio a ${client.name}?`;
                 if (window.confirm(confirmMsg)) {
                     try {
-                        // Calcula la fecha exacta del mes siguiente
                         const [y, m, d] = client.dueDate.split('-');
-                        const nextMonth = new Date(y, parseInt(m), d); // Mes adelantado por 1
+                        const nextMonth = new Date(y, parseInt(m), d); 
                         const newY = nextMonth.getFullYear();
                         const newM = String(nextMonth.getMonth() + 1).padStart(2, '0');
                         const newD = String(nextMonth.getDate()).padStart(2, '0');
                         const newDueDate = `${newY}-${newM}-${newD}`;
 
-                        // Crea el registro del historial
                         const historyEntry = {
-                            date: new Date().toLocaleDateString('es-CO'), // Fecha en la que pagó
+                            date: new Date().toLocaleDateString('es-CO'),
                             amount: client.price,
-                            periodCovered: client.dueDate // El mes que estaba pendiente
+                            periodCovered: client.dueDate 
                         };
 
                         const updatedHistory = [...(client.history || []), historyEntry];
 
-                        // Actualiza en Firebase
                         await db.collection("clientes").doc(client.id).update({
                             dueDate: newDueDate,
                             status: 'aldia',
@@ -179,6 +176,24 @@
                         alert("Hubo un error al registrar el pago.");
                     }
                 }
+            };
+
+            // ENVIAR NOTIFICACIÓN POR WHATSAPP
+            const handleWhatsApp = (client) => {
+                // Limpiar el número de teléfono (quitar espacios o guiones)
+                let phone = client.phone.replace(/\D/g, '');
+                
+                // Si el número tiene 10 dígitos y empieza por 3 (típico en Colombia), le agregamos el +57
+                if (phone.length === 10 && phone.startsWith('3')) {
+                    phone = '57' + phone;
+                }
+
+                // Generar el mensaje de cobro
+                const message = `Hola ${client.name}, te recordamos que tu mes de servicio de internet se encuentra pendiente de pago desde el ${client.dueDate}. El saldo a cancelar es de $${Number(client.price).toLocaleString('es-CO')}. Por favor realiza el pago para evitar la suspensión del servicio. ¡Gracias!`;
+                
+                // Crear el enlace y abrir WhatsApp
+                const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+                window.open(url, '_blank');
             };
 
             const deleteClient = async (id) => {
@@ -314,187 +329,4 @@
                                             <div className="text-slate-700 font-mono font-medium text-sm text-center">{client.ip}</div>
                                         </div>
                                         <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Próximo Corte</div>
-                                            <div className="text-slate-700 font-medium text-sm text-center">{client.dueDate}</div>
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-3 border-t border-slate-50">
-                                        <div className="flex items-center text-indigo-600 font-bold">
-                                            <i className="fa-solid fa-dollar-sign mr-1"></i>
-                                            {Number(client.price).toLocaleString('es-CO')}
-                                        </div>
-                                        <div className="flex flex-wrap gap-1.5 justify-end">
-                                            <button onClick={() => handleRenew(client)} className="w-9 h-9 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-xl" title="Registrar Pago y Renovar">
-                                                <i className="fa-solid fa-hand-holding-dollar text-sm"></i>
-                                            </button>
-                                            <button onClick={() => setHistoryClient(client)} className="w-9 h-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-xl" title="Ver Historial">
-                                                <i className="fa-solid fa-clock-rotate-left text-sm"></i>
-                                            </button>
-                                            <button onClick={() => setReceiptClient(client)} className="w-9 h-9 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl" title="Ver Comprobante">
-                                                <i className="fa-solid fa-file-invoice text-sm"></i>
-                                            </button>
-                                            <button onClick={() => editClient(client)} className="w-9 h-9 flex items-center justify-center bg-slate-100 text-slate-600 rounded-xl" title="Editar">
-                                                <i className="fa-solid fa-pen text-sm"></i>
-                                            </button>
-                                            <button onClick={() => deleteClient(client.id)} className="w-9 h-9 flex items-center justify-center bg-rose-50 text-rose-500 rounded-xl" title="Borrar">
-                                                <i className="fa-solid fa-trash text-sm"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </main>
-
-                    <div className="no-print fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
-                        <button 
-                            onClick={() => setIsFormOpen(true)}
-                            className="bg-indigo-600 text-white w-full py-4 rounded-2xl shadow-xl shadow-indigo-200 font-bold text-lg flex items-center justify-center active:scale-95 transition-transform"
-                        >
-                            <i className="fa-solid fa-plus mr-3"></i> Nuevo Cliente
-                        </button>
-                    </div>
-
-                    {/* MODAL FORMULARIO */}
-                    {isFormOpen && (
-                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
-                            <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
-                                <div className="flex justify-between items-center mb-8">
-                                    <h2 className="text-2xl font-black text-slate-800">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
-                                    <button onClick={closeForm} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400">
-                                        <i className="fa-solid fa-xmark text-lg"></i>
-                                    </button>
-                                </div>
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    <input required name="name" value={formData.name} onChange={handleInputChange} placeholder="Nombre del cliente" type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input required name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Teléfono" type="tel" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <input required name="ip" placeholder="IP Antena" value={formData.ip} onChange={handleInputChange} type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input required name="plan" placeholder="Plan (10Mb)" value={formData.plan} onChange={handleInputChange} type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <input required name="price" value={formData.price} onChange={handleInputChange} placeholder="Mensualidad" type="number" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input required name="dueDate" value={formData.dueDate} onChange={handleInputChange} type="date" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <select name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700">
-                                            <option value="aldia">✅ Al día</option>
-                                            <option value="pendiente">⏳ Pendiente</option>
-                                            <option value="cortado">❌ Cortado</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl shadow-xl hover:bg-indigo-700 mt-6">
-                                        {editingId ? 'Guardar Cambios' : 'Registrar Cliente'}
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL HISTORIAL DE PAGOS */}
-                    {historyClient && (
-                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl max-h-[80vh] flex flex-col">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-black text-slate-800">Historial Pagos</h2>
-                                    <button onClick={() => setHistoryClient(null)} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 shrink-0">
-                                        <i className="fa-solid fa-xmark text-lg"></i>
-                                    </button>
-                                </div>
-                                <p className="text-slate-500 text-sm mb-4 font-bold">{historyClient.name}</p>
-                                
-                                <div className="overflow-y-auto flex-1 pr-2 no-scrollbar">
-                                    {(!historyClient.history || historyClient.history.length === 0) ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            <i className="fa-solid fa-folder-open text-3xl mb-3 opacity-30"></i>
-                                            <p className="text-sm">No hay pagos registrados aún.</p>
-                                        </div>
-                                    ) : (
-                                        <ul className="space-y-3">
-                                            {/* Invertimos el array para que el más reciente salga arriba */}
-                                            {[...historyClient.history].reverse().map((h, index) => (
-                                                <li key={index} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                                    <div>
-                                                        <p className="font-bold text-slate-700 text-sm">Corte: {h.periodCovered}</p>
-                                                        <p className="text-xs text-slate-400 mt-0.5">Pagado: {h.date}</p>
-                                                    </div>
-                                                    <span className="text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded-lg">
-                                                        +${Number(h.amount).toLocaleString('es-CO')}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL RECIBO */}
-                    {receiptClient && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print-area">
-                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl print-shadow-none print:w-full print:max-w-none print:p-0">
-                                <div className="text-center border-b border-slate-100 pb-6 mb-6">
-                                    <div className="no-print w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i className="fa-solid fa-receipt text-2xl"></i>
-                                    </div>
-                                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Estado de Cuenta</h2>
-                                    <p className="text-slate-400 text-sm mt-1">{todayDate}</p>
-                                </div>
-                                <div className="space-y-4 mb-8">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Cliente</span>
-                                        <span className="font-bold text-slate-700 text-right">{receiptClient.name}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Identificación (IP)</span>
-                                        <span className="font-medium text-slate-700">{receiptClient.ip}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Plan Contratado</span>
-                                        <span className="font-medium text-slate-700">{receiptClient.plan}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-t border-slate-100 pt-4">
-                                        <span className="text-slate-400 text-sm">Estado Actual</span>
-                                        <span className={`font-bold ${
-                                            receiptClient.status === 'aldia' ? 'text-emerald-500' : 
-                                            receiptClient.status === 'pendiente' ? 'text-amber-500' : 'text-rose-500'
-                                        }`}>
-                                            {receiptClient.status === 'aldia' ? '✅ AL DÍA' : receiptClient.status === 'pendiente' ? '⏳ PENDIENTE' : '❌ CORTADO'}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="bg-slate-50 p-6 rounded-2xl print:bg-transparent print:border print:border-slate-200 print:p-4">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-slate-500 font-bold uppercase text-sm">Saldo a Pagar</span>
-                                        <span className="text-2xl font-black text-indigo-600">
-                                            ${receiptClient.status === 'aldia' ? '0' : Number(receiptClient.price).toLocaleString('es-CO')}
-                                        </span>
-                                    </div>
-                                    {receiptClient.status === 'aldia' && (
-                                        <div className="text-center text-xs font-medium text-emerald-600 bg-emerald-100 py-2 rounded-lg mt-3 print:border print:border-emerald-200">
-                                            Servicio cubierto. Próximo corte: {receiptClient.dueDate}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="no-print flex gap-3 mt-8">
-                                    <button onClick={() => setReceiptClient(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-transform">
-                                        Cerrar
-                                    </button>
-                                    <button onClick={handlePrint} className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 active:scale-95 transition-transform flex items-center justify-center">
-                                        <i className="fa-solid fa-print mr-2"></i> Imprimir
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <div className="no-print safe-area-bottom h-20"></div>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                                            <div className="text-[10px
