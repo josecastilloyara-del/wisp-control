@@ -48,7 +48,7 @@
 
     <script type="text/babel">
         // ---------------------------------------------------------
-        // 1. CONFIGURACIÓN DE FIREBASE (¡Tus datos ya están aquí!)
+        // 1. CONFIGURACIÓN DE FIREBASE
         // ---------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyCNkQiElGE7ud9EIht4Li8pg6DBSRuorW8",
@@ -59,7 +59,6 @@
             appId: "1:191768568916:web:2a538b5ac3bdc36a8df9c1"
         };
 
-        // Inicializamos Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -81,15 +80,42 @@
                 name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia'
             });
 
-            // 2. OBTENER DATOS DE FIREBASE EN TIEMPO REAL
+            // 2. OBTENER DATOS Y EJECUTAR MOTOR AUTOMÁTICO DE FECHAS
             useEffect(() => {
                 const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
                     const clientsData = [];
+                    const updatesToFirebase = []; // Guarda los clientes que caducaron para actualizarlos
+
+                    // Obtener la fecha local de hoy en formato YYYY-MM-DD
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const todayString = `${yyyy}-${mm}-${dd}`;
+
                     querySnapshot.forEach((doc) => {
-                        clientsData.push({ id: doc.id, ...doc.data() });
+                        const data = doc.data();
+                        let currentStatus = data.status;
+
+                        // LÓGICA AUTOMÁTICA: Si está al día, pero la fecha de corte es hoy o ya pasó
+                        if (currentStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
+                            currentStatus = 'pendiente'; // Cambia el estado
+                            updatesToFirebase.push({ id: doc.id, newStatus: currentStatus });
+                        }
+
+                        clientsData.push({ id: doc.id, ...data, status: currentStatus });
                     });
+
+                    // Ordenamos los clientes y actualizamos la pantalla
                     setClients(clientsData.sort((a, b) => b.createdAt - a.createdAt));
                     setLoading(false);
+
+                    // Enviamos las actualizaciones a Firebase silenciosamente en segundo plano
+                    updatesToFirebase.forEach(update => {
+                        db.collection("clientes").doc(update.id).update({ status: update.newStatus })
+                          .catch(err => console.error("Error auto-actualizando estado: ", err));
+                    });
+
                 }, (error) => {
                     console.error("Error al conectar con Firebase: ", error);
                     alert("Error al conectar con la base de datos.");
@@ -104,7 +130,6 @@
                 setFormData(prev => ({ ...prev, [name]: value }));
             };
 
-            // 3. GUARDAR O EDITAR EN FIREBASE
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 try {
@@ -123,7 +148,6 @@
                 }
             };
 
-            // 4. ELIMINAR EN FIREBASE
             const deleteClient = async (id) => {
                 if (window.confirm('¿Estás seguro de eliminar este registro en la nube?')) {
                     try {
