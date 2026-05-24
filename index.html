@@ -19,7 +19,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
@@ -29,7 +29,6 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
         
-        /* Animación suave para el menú desplegable */
         @keyframes fadeIn { 
             from { opacity: 0; transform: translateY(10px) scale(0.95); } 
             to { opacity: 1; transform: translateY(0) scale(1); } 
@@ -82,12 +81,11 @@
             
             const [receiptClient, setReceiptClient] = useState(null);
             const [historyClient, setHistoryClient] = useState(null);
-            
-            // Estado para el menú de opciones (tres puntos)
             const [openMenuId, setOpenMenuId] = useState(null);
             
+            // NUEVO: Agregamos "zona" al estado inicial del formulario
             const [formData, setFormData] = useState({
-                name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
+                name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
             });
 
             useEffect(() => {
@@ -141,12 +139,15 @@
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
+                // Limpiar espacios en blanco al inicio/final de la zona para evitar duplicados accidentales
+                const finalData = { ...formData, zona: formData.zona.trim() };
+
                 try {
                     if (editingId) {
-                        await db.collection("clientes").doc(editingId).update(formData);
+                        await db.collection("clientes").doc(editingId).update(finalData);
                     } else {
                         await db.collection("clientes").add({
-                            ...formData,
+                            ...finalData,
                             history: [],
                             createdAt: Date.now()
                         });
@@ -198,14 +199,8 @@
 
             const handleWhatsApp = (client) => {
                 let phone = (client.phone || '').replace(/\D/g, '');
-                
-                if (!phone) {
-                    return alert("Este cliente no tiene un número de teléfono registrado.");
-                }
-
-                if (phone.length === 10 && phone.startsWith('3')) {
-                    phone = '57' + phone;
-                }
+                if (!phone) return alert("Este cliente no tiene un número de teléfono registrado.");
+                if (phone.length === 10 && phone.startsWith('3')) phone = '57' + phone;
 
                 const priceValue = client.price ? Number(client.price) : 0;
                 const message = `Hola ${client.name || 'estimado cliente'}, te recordamos que tu mes de servicio de internet se encuentra pendiente de pago desde el ${client.dueDate || 'día de corte'}. El saldo a cancelar es de $${priceValue.toLocaleString('es-CO')}. Por favor realiza el pago para evitar la suspensión del servicio. ¡Gracias!`;
@@ -223,6 +218,7 @@
             const editClient = (client) => {
                 setFormData({
                     name: client.name || '',
+                    zona: client.zona || '', // Incluir zona al editar
                     phone: client.phone || '',
                     ip: client.ip || '',
                     plan: client.plan || '',
@@ -238,11 +234,12 @@
             const closeForm = () => {
                 setIsFormOpen(false);
                 setEditingId(null);
-                setFormData({ name: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: [] });
+                setFormData({ name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: [] });
             };
 
             const handlePrint = () => window.print();
 
+            // Filtrado de clientes (búsqueda y estado)
             const filteredClients = useMemo(() => {
                 return clients.filter(client => {
                     const safeName = client.name || '';
@@ -254,6 +251,30 @@
                     return matchesSearch && matchesFilter;
                 });
             }, [clients, searchTerm, filterStatus]);
+
+            // NUEVO: Extraer zonas únicas para el autocompletado del formulario
+            const existingZones = useMemo(() => {
+                const zones = clients.map(c => c.zona).filter(z => z && z.trim() !== '');
+                return [...new Set(zones)].sort();
+            }, [clients]);
+
+            // NUEVO: Agrupar clientes filtrados por Zona
+            const groupedClients = useMemo(() => {
+                const grouped = {};
+                filteredClients.forEach(client => {
+                    const zone = (client.zona && client.zona.trim() !== '') ? client.zona : 'Sin Zona';
+                    if (!grouped[zone]) grouped[zone] = [];
+                    grouped[zone].push(client);
+                });
+                return grouped;
+            }, [filteredClients]);
+
+            // NUEVO: Ordenar las zonas alfabéticamente (dejando "Sin Zona" al final)
+            const sortedZones = Object.keys(groupedClients).sort((a, b) => {
+                if (a === 'Sin Zona') return 1;
+                if (b === 'Sin Zona') return -1;
+                return a.localeCompare(b);
+            });
 
             const stats = useMemo(() => {
                 return {
@@ -275,7 +296,6 @@
 
             return (
                 <div className="min-h-screen flex flex-col max-w-md mx-auto bg-slate-50 shadow-2xl relative">
-                    {/* MEJORA 1: Header con Gradiente y Sombra */}
                     <header className="no-print bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 text-white p-6 rounded-b-[2rem] shadow-[0_10px_40px_-10px_rgba(79,70,229,0.5)] sticky top-0 z-20">
                         <div className="flex justify-between items-center mb-4">
                             <div>
@@ -303,273 +323,7 @@
                         </div>
                     </header>
 
-                    <main className="no-print flex-1 px-4 py-6 space-y-6 overflow-y-auto pb-32">
-                        <div className="space-y-3">
+                    <main className="no-print flex-1 px-4 py-6 overflow-y-auto pb-32">
+                        <div className="space-y-3 mb-6">
                             <div className="relative">
-                                <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                {/* MEJORA 2: Input de búsqueda moderno */}
-                                <input 
-                                    type="text" 
-                                    placeholder="Buscar por nombre o IP..." 
-                                    className="w-full bg-slate-100/80 border border-transparent focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl py-4 pl-12 pr-4 shadow-sm outline-none text-slate-700 transition-all duration-300"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                                {['todos', 'aldia', 'pendiente', 'cortado'].map((status) => (
-                                    <button 
-                                        key={status}
-                                        onClick={() => setFilterStatus(status)}
-                                        className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-                                            filterStatus === status 
-                                            ? 'bg-indigo-600 text-white shadow-md' 
-                                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        {status === 'todos' ? 'Todos' : status === 'aldia' ? 'Al día' : status === 'pendiente' ? 'Pendientes' : 'Cortados'}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-4 relative">
-                            {filteredClients.length === 0 && (
-                                <div className="text-center py-10 text-slate-400">
-                                    <i className="fa-solid fa-cloud text-4xl mb-3 opacity-50"></i>
-                                    <p>Base de datos lista.</p>
-                                </div>
-                            )}
-                            
-                            {filteredClients.map(client => (
-                                /* MEJORA 3: Tarjetas flotantes y sombras suaves */
-                                <div key={client.id} className="bg-white rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300 relative overflow-visible group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name || 'Sin Nombre'}</h3>
-                                                {/* MEJORA 4: Badges (Pills) modernos en lugar de la barra lateral */}
-                                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
-                                                    client.status === 'aldia' ? 'bg-emerald-100 text-emerald-700' : 
-                                                    client.status === 'pendiente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                                                }`}>
-                                                    {client.status === 'aldia' ? 'Al Día' : client.status === 'pendiente' ? 'Pendiente' : 'Cortado'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center text-slate-400 text-xs">
-                                                <i className="fa-solid fa-phone mr-1.5 text-[10px]"></i>
-                                                {client.phone || 'Sin Teléfono'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 mb-4">
-                                        <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">IP Antena</div>
-                                            <div className="text-slate-700 font-mono font-medium text-sm text-center">{client.ip || 'N/A'}</div>
-                                        </div>
-                                        <div className="bg-slate-50 rounded-2xl p-3 border border-slate-100">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase mb-1 text-center">Próximo Corte</div>
-                                            <div className="text-slate-700 font-medium text-sm text-center">{client.dueDate || 'N/A'}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* MEJORA 5: Menú de tres puntos (Limpieza Visual) */}
-                                    <div className="flex justify-between items-center pt-3 border-t border-slate-50 relative">
-                                        <div className={`flex items-center font-bold ${client.status === 'aldia' ? 'text-slate-400' : 'text-indigo-600'}`}>
-                                            <i className="fa-solid fa-dollar-sign mr-1"></i>
-                                            {client.price ? Number(client.price).toLocaleString('es-CO') : '0'}
-                                        </div>
-                                        
-                                        <div className="flex gap-2">
-                                            {(client.status === 'pendiente' || client.status === 'cortado') && (
-                                                <button onClick={() => handleWhatsApp(client)} className="w-10 h-10 flex items-center justify-center bg-green-50 text-green-600 hover:bg-green-100 rounded-xl transition-colors" title="Notificar por WhatsApp">
-                                                    <i className="fa-brands fa-whatsapp text-lg"></i>
-                                                </button>
-                                            )}
-                                            
-                                            <button onClick={() => handleRenew(client)} className="w-10 h-10 flex items-center justify-center bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-colors" title="Registrar Pago y Renovar">
-                                                <i className="fa-solid fa-hand-holding-dollar text-lg"></i>
-                                            </button>
-
-                                            <button onClick={() => setOpenMenuId(openMenuId === client.id ? null : client.id)} className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
-                                                <i className="fa-solid fa-ellipsis-vertical text-lg"></i>
-                                            </button>
-
-                                            {/* Desplegable */}
-                                            {openMenuId === client.id && (
-                                                <>
-                                                    <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)}></div>
-                                                    <div className="absolute right-0 bottom-14 mt-2 w-44 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 py-2 z-20 flex flex-col overflow-hidden animate-fade-in">
-                                                        <button onClick={() => { setHistoryClient(client); setOpenMenuId(null); }} className="flex items-center px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left font-medium">
-                                                            <i className="fa-solid fa-clock-rotate-left w-6 text-blue-500"></i> Historial
-                                                        </button>
-                                                        <button onClick={() => { setReceiptClient(client); setOpenMenuId(null); }} className="flex items-center px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left font-medium border-b border-slate-50">
-                                                            <i className="fa-solid fa-file-invoice w-6 text-indigo-500"></i> Comprobante
-                                                        </button>
-                                                        <button onClick={() => { editClient(client); setOpenMenuId(null); }} className="flex items-center px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left font-medium">
-                                                            <i className="fa-solid fa-pen w-6 text-slate-400"></i> Editar
-                                                        </button>
-                                                        <button onClick={() => { deleteClient(client.id); setOpenMenuId(null); }} className="flex items-center px-4 py-3 text-sm text-rose-600 hover:bg-rose-50 transition-colors text-left font-medium">
-                                                            <i className="fa-solid fa-trash w-6 text-rose-500"></i> Borrar Cliente
-                                                        </button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </main>
-
-                    <div className="no-print fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
-                        <button 
-                            onClick={() => setIsFormOpen(true)}
-                            className="bg-indigo-600 text-white w-full py-4 rounded-2xl shadow-[0_10px_20px_-10px_rgba(79,70,229,0.8)] font-bold text-lg flex items-center justify-center active:scale-95 transition-transform"
-                        >
-                            <i className="fa-solid fa-plus mr-3"></i> Nuevo Cliente
-                        </button>
-                    </div>
-
-                    {/* MODAL FORMULARIO */}
-                    {isFormOpen && (
-                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
-                            <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
-                                <div className="flex justify-between items-center mb-8">
-                                    <h2 className="text-2xl font-black text-slate-800">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
-                                    <button onClick={closeForm} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
-                                        <i className="fa-solid fa-xmark text-lg"></i>
-                                    </button>
-                                </div>
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    <input required name="name" value={formData.name} onChange={handleInputChange} placeholder="Nombre del cliente" type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input required name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Teléfono" type="tel" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <input required name="ip" placeholder="IP Antena" value={formData.ip} onChange={handleInputChange} type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input required name="plan" placeholder="Plan (10Mb)" value={formData.plan} onChange={handleInputChange} type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <input required name="price" value={formData.price} onChange={handleInputChange} placeholder="Mensualidad" type="number" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input required name="dueDate" value={formData.dueDate} onChange={handleInputChange} type="date" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <select name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700">
-                                            <option value="aldia">✅ Al día</option>
-                                            <option value="pendiente">⏳ Pendiente</option>
-                                            <option value="cortado">❌ Cortado</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl shadow-xl hover:bg-indigo-700 transition-colors mt-6">
-                                        {editingId ? 'Guardar Cambios' : 'Registrar Cliente'}
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL HISTORIAL DE PAGOS */}
-                    {historyClient && (
-                        <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl max-h-[80vh] flex flex-col">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-xl font-black text-slate-800">Historial Pagos</h2>
-                                    <button onClick={() => setHistoryClient(null)} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors shrink-0">
-                                        <i className="fa-solid fa-xmark text-lg"></i>
-                                    </button>
-                                </div>
-                                <p className="text-slate-500 text-sm mb-4 font-bold">{historyClient.name || 'Sin Nombre'}</p>
-                                
-                                <div className="overflow-y-auto flex-1 pr-2 no-scrollbar">
-                                    {(!historyClient.history || historyClient.history.length === 0) ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            <i className="fa-solid fa-folder-open text-3xl mb-3 opacity-30"></i>
-                                            <p className="text-sm">No hay pagos registrados aún.</p>
-                                        </div>
-                                    ) : (
-                                        <ul className="space-y-3">
-                                            {[...historyClient.history].reverse().map((h, index) => (
-                                                <li key={index} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                                    <div>
-                                                        <p className="font-bold text-slate-700 text-sm">Corte: {h.periodCovered}</p>
-                                                        <p className="text-xs text-slate-400 mt-0.5">Pagado: {h.date}</p>
-                                                    </div>
-                                                    <span className="text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded-lg">
-                                                        +${Number(h.amount).toLocaleString('es-CO')}
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL RECIBO */}
-                    {receiptClient && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print-area">
-                            <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl print-shadow-none print:w-full print:max-w-none print:p-0">
-                                <div className="text-center border-b border-slate-100 pb-6 mb-6">
-                                    <div className="no-print w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i className="fa-solid fa-receipt text-2xl"></i>
-                                    </div>
-                                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Estado de Cuenta</h2>
-                                    <p className="text-slate-400 text-sm mt-1">{todayDate}</p>
-                                </div>
-                                <div className="space-y-4 mb-8">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Cliente</span>
-                                        <span className="font-bold text-slate-700 text-right">{receiptClient.name || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Identificación (IP)</span>
-                                        <span className="font-medium text-slate-700">{receiptClient.ip || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Plan Contratado</span>
-                                        <span className="font-medium text-slate-700">{receiptClient.plan || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-t border-slate-100 pt-4">
-                                        <span className="text-slate-400 text-sm">Estado Actual</span>
-                                        <span className={`font-bold ${
-                                            receiptClient.status === 'aldia' ? 'text-emerald-500' : 
-                                            receiptClient.status === 'pendiente' ? 'text-amber-500' : 'text-rose-500'
-                                        }`}>
-                                            {receiptClient.status === 'aldia' ? '✅ AL DÍA' : receiptClient.status === 'pendiente' ? '⏳ PENDIENTE' : '❌ CORTADO'}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="bg-slate-50 p-6 rounded-2xl print:bg-transparent print:border print:border-slate-200 print:p-4">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-slate-500 font-bold uppercase text-sm">Saldo a Pagar</span>
-                                        <span className="text-2xl font-black text-indigo-600">
-                                            ${receiptClient.status === 'aldia' ? '0' : (receiptClient.price ? Number(receiptClient.price).toLocaleString('es-CO') : '0')}
-                                        </span>
-                                    </div>
-                                    {receiptClient.status === 'aldia' && (
-                                        <div className="text-center text-xs font-medium text-emerald-600 bg-emerald-100 py-2 rounded-lg mt-3 print:border print:border-emerald-200">
-                                            Servicio cubierto. Próximo corte: {receiptClient.dueDate}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="no-print flex gap-3 mt-8">
-                                    <button onClick={() => setReceiptClient(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-transform">
-                                        Cerrar
-                                    </button>
-                                    <button onClick={handlePrint} className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-[0_10px_20px_-10px_rgba(79,70,229,0.8)] active:scale-95 transition-transform flex items-center justify-center">
-                                        <i className="fa-solid fa-print mr-2"></i> Imprimir
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <div className="no-print safe-area-bottom h-20"></div>
-                </div>
-            );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                                <i className="fa-solid fa
