@@ -87,10 +87,12 @@
                 name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
             });
 
+            // ---------------------------------------------------------
+            // CÓDIGO CORREGIDO: Evita el bucle infinito de lecturas
+            // ---------------------------------------------------------
             useEffect(() => {
                 const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
                     const clientsData = [];
-                    const updatesToFirebase = []; 
 
                     const today = new Date();
                     const yyyy = today.getFullYear();
@@ -100,28 +102,24 @@
 
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        let currentStatus = data.status || 'aldia';
+                        
+                        // Calculamos el estado visualmente, pero NO lo guardamos en la BD automáticamente
+                        let displayStatus = data.status || 'aldia';
 
-                        if (currentStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
-                            currentStatus = 'pendiente';
-                            updatesToFirebase.push({ id: doc.id, newStatus: currentStatus });
+                        if (displayStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
+                            displayStatus = 'pendiente'; 
                         }
 
                         clientsData.push({ 
                             id: doc.id, 
                             ...data, 
-                            status: currentStatus, 
+                            status: displayStatus, // Usamos el estado calculado
                             history: data.history || [] 
                         });
                     });
 
                     setClients(clientsData.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
                     setLoading(false);
-
-                    updatesToFirebase.forEach(update => {
-                        db.collection("clientes").doc(update.id).update({ status: update.newStatus })
-                          .catch(err => console.error("Error auto-actualizando: ", err));
-                    });
 
                 }, (error) => {
                     console.error("Error Firebase: ", error);
@@ -130,6 +128,7 @@
 
                 return () => unsubscribe();
             }, []);
+            // ---------------------------------------------------------
 
             const handleInputChange = (e) => {
                 const { name, value } = e.target;
@@ -218,7 +217,7 @@
             const editClient = (client) => {
                 setFormData({
                     name: client.name || '',
-                    zona: client.zona || '', // Cargar zona si existe
+                    zona: client.zona || '', 
                     phone: client.phone || '',
                     ip: client.ip || '',
                     plan: client.plan || '',
@@ -251,7 +250,6 @@
                 });
             }, [clients, searchTerm, filterStatus]);
 
-            // PROTECCIÓN: Validar que la zona sea texto antes de procesarla para las sugerencias
             const existingZones = useMemo(() => {
                 const zones = clients
                     .map(c => c.zona)
@@ -259,7 +257,6 @@
                 return [...new Set(zones)].sort();
             }, [clients]);
 
-            // PROTECCIÓN: Agrupar validando clientes antiguos sin zona
             const groupedClients = useMemo(() => {
                 const grouped = {};
                 filteredClients.forEach(client => {
@@ -293,6 +290,7 @@
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-indigo-600">
                         <i className="fa-solid fa-circle-notch fa-spin text-4xl mb-4"></i>
                         <p className="font-bold animate-pulse">Conectando a la nube...</p>
+                        <p className="text-xs text-slate-400 mt-2">Si demora mucho, revisa tu cuota en Firebase.</p>
                     </div>
                 );
             }
