@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>WISP Control Cloud</title>
@@ -20,45 +19,29 @@
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8fafc;
-            -webkit-tap-highlight-color: transparent;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
-        
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateY(10px) scale(0.95); } 
-            to { opacity: 1; transform: translateY(0) scale(1); } 
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
         .animate-fade-in { animation: fadeIn 0.15s ease-out forwards; transform-origin: bottom right; }
-
         @media print {
             .no-print { display: none !important; }
             body { background-color: white !important; }
-            .print-area { 
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-                background: white; z-index: 9999; padding: 20px;
-                display: flex; flex-direction: column;
-            }
+            .print-area { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 9999; padding: 20px; display: flex; flex-direction: column; }
             .print-shadow-none { box-shadow: none !important; }
         }
     </style>
 </head>
 <body>
     <div id="root">
-        <div style="text-align: center; margin-top: 40vh; font-family: sans-serif; color: #6366f1;">
-            <p>Construyendo interfaz...</p>
-            <p style="font-size: 12px; color: #94a3b8; margin-top: 10px;">Si esta pantalla no desaparece, revisa tu conexión a internet.</p>
+        <div style="text-align: center; margin-top: 40vh; color: #6366f1; font-family: sans-serif;">
+            <p>Iniciando interfaz...</p>
         </div>
     </div>
 
     <script type="text/babel">
-        // ---------------------------------------------------------
         // 1. CONFIGURACIÓN DE FIREBASE
-        // ---------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyCNkQiElGE7ud9EIht4Li8pg6DBSRuorW8",
             authDomain: "wisp-la-dorada.firebaseapp.com",
@@ -72,38 +55,8 @@
             firebase.initializeApp(firebaseConfig);
         }
         const db = firebase.firestore();
-        // ---------------------------------------------------------
 
         const { useState, useEffect, useMemo } = React;
-
-        // ---------------------------------------------------------
-        // ESCUDO DE ERRORES (Evita la pantalla blanca)
-        // ---------------------------------------------------------
-        class ErrorBoundary extends React.Component {
-            constructor(props) {
-                super(props);
-                this.state = { hasError: false, error: null };
-            }
-            static getDerivedStateFromError(error) {
-                return { hasError: true, error };
-            }
-            render() {
-                if (this.state.hasError) {
-                    return (
-                        <div className="min-h-screen p-8 text-center flex flex-col items-center justify-center bg-slate-50">
-                            <i className="fa-solid fa-triangle-exclamation text-rose-500 text-6xl mb-4"></i>
-                            <h1 className="text-2xl font-black text-slate-800 mb-2">Algo salió mal</h1>
-                            <p className="text-sm text-slate-500 mb-6">La aplicación detectó un error interno y se detuvo para proteger los datos.</p>
-                            <div className="bg-rose-50 text-rose-700 p-4 rounded-2xl text-left overflow-auto w-full font-mono text-xs border border-rose-100 shadow-sm">
-                                {this.state.error ? this.state.error.toString() : 'Error desconocido de lectura'}
-                            </div>
-                            <p className="mt-8 text-xs font-bold text-slate-400">Por favor, toma captura a esta pantalla.</p>
-                        </div>
-                    );
-                }
-                return this.props.children;
-            }
-        }
 
         function App() {
             const [clients, setClients] = useState([]);
@@ -112,19 +65,14 @@
             const [isFormOpen, setIsFormOpen] = useState(false);
             const [editingId, setEditingId] = useState(null);
             const [filterStatus, setFilterStatus] = useState('todos');
-            
             const [receiptClient, setReceiptClient] = useState(null);
             const [historyClient, setHistoryClient] = useState(null);
             const [openMenuId, setOpenMenuId] = useState(null);
-            
-            const [formData, setFormData] = useState({
-                name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
-            });
+            const [formData, setFormData] = useState({ name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: [] });
 
             useEffect(() => {
                 const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
                     const clientsData = [];
-
                     const today = new Date();
                     const yyyy = today.getFullYear();
                     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -133,29 +81,19 @@
 
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
-                        
                         let displayStatus = data.status || 'aldia';
                         if (displayStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
                             displayStatus = 'pendiente'; 
                         }
-
-                        clientsData.push({ 
-                            id: doc.id, 
-                            ...data, 
-                            status: displayStatus, 
-                            history: data.history || [] 
-                        });
+                        clientsData.push({ id: doc.id, ...data, status: displayStatus, history: data.history || [] });
                     });
-
                     setClients(clientsData.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
                     setLoading(false);
-
                 }, (error) => {
                     console.error("Error Firebase: ", error);
-                    alert("Error conectando a la base de datos: " + error.message);
+                    alert("Error conectando a Firebase.");
                     setLoading(false);
                 });
-
                 return () => unsubscribe();
             }, []);
 
@@ -168,31 +106,23 @@
                 e.preventDefault();
                 const zonaSegura = (typeof formData.zona === 'string') ? formData.zona.trim() : '';
                 const finalData = { ...formData, zona: zonaSegura };
-
                 try {
                     if (editingId) {
                         await db.collection("clientes").doc(editingId).update(finalData);
                     } else {
-                        await db.collection("clientes").add({
-                            ...finalData,
-                            history: [],
-                            createdAt: Date.now()
-                        });
+                        await db.collection("clientes").add({ ...finalData, history: [], createdAt: Date.now() });
                     }
                     closeForm();
                 } catch (error) {
-                    console.error("Error guardando documento: ", error);
-                    alert("Error al guardar el cliente.");
+                    console.error("Error guardando:", error);
+                    alert("Error al guardar.");
                 }
             };
 
             const handleRenew = async (client) => {
-                if (!client.dueDate) return alert("El cliente no tiene una fecha de corte registrada para renovar.");
-
+                if (!client.dueDate) return alert("El cliente no tiene fecha de corte.");
                 const priceToPay = client.price ? Number(client.price) : 0;
-                const confirmMsg = `¿Registrar pago de $${priceToPay.toLocaleString('es-CO')} y renovar 1 mes de servicio a ${client.name || 'este cliente'}?`;
-                
-                if (window.confirm(confirmMsg)) {
+                if (window.confirm(`¿Registrar pago de $${priceToPay.toLocaleString('es-CO')} y renovar 1 mes a ${client.name}?`)) {
                     try {
                         const [y, m, d] = client.dueDate.split('-');
                         const nextMonth = new Date(y, parseInt(m), d); 
@@ -200,58 +130,33 @@
                         const newM = String(nextMonth.getMonth() + 1).padStart(2, '0');
                         const newD = String(nextMonth.getDate()).padStart(2, '0');
                         const newDueDate = `${newY}-${newM}-${newD}`;
-
-                        const historyEntry = {
-                            date: new Date().toLocaleDateString('es-CO'),
-                            amount: priceToPay,
-                            periodCovered: client.dueDate 
-                        };
-
+                        const historyEntry = { date: new Date().toLocaleDateString('es-CO'), amount: priceToPay, periodCovered: client.dueDate };
                         const updatedHistory = [...(client.history || []), historyEntry];
-
-                        await db.collection("clientes").doc(client.id).update({
-                            dueDate: newDueDate,
-                            status: 'aldia',
-                            history: updatedHistory
-                        });
-
+                        await db.collection("clientes").doc(client.id).update({ dueDate: newDueDate, status: 'aldia', history: updatedHistory });
                     } catch (error) {
-                        console.error("Error al renovar: ", error);
-                        alert("Hubo un error al registrar el pago.");
+                        console.error("Error renovando:", error);
+                        alert("Error al registrar el pago.");
                     }
                 }
             };
 
             const handleWhatsApp = (client) => {
                 let phone = (client.phone || '').replace(/\D/g, '');
-                if (!phone) return alert("Este cliente no tiene un número de teléfono registrado.");
+                if (!phone) return alert("No tiene teléfono registrado.");
                 if (phone.length === 10 && phone.startsWith('3')) phone = '57' + phone;
-
                 const priceValue = client.price ? Number(client.price) : 0;
-                const message = `Hola ${client.name || 'estimado cliente'}, te recordamos que tu mes de servicio de internet se encuentra pendiente de pago desde el ${client.dueDate || 'día de corte'}. El saldo a cancelar es de $${priceValue.toLocaleString('es-CO')}. Por favor realiza el pago para evitar la suspensión del servicio. ¡Gracias!`;
-                
-                const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-                window.open(url, '_blank');
+                const message = `Hola ${client.name || 'cliente'}, tu mes de internet está pendiente desde el ${client.dueDate}. Saldo: $${priceValue.toLocaleString('es-CO')}. Por favor realiza el pago. ¡Gracias!`;
+                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
             };
 
             const deleteClient = async (id) => {
-                if (window.confirm('¿Eliminar este registro en la nube de forma permanente?')) {
+                if (window.confirm('¿Eliminar registro permanentemente?')) {
                     await db.collection("clientes").doc(id).delete();
                 }
             };
 
             const editClient = (client) => {
-                setFormData({
-                    name: client.name || '',
-                    zona: client.zona || '', 
-                    phone: client.phone || '',
-                    ip: client.ip || '',
-                    plan: client.plan || '',
-                    price: client.price || '',
-                    dueDate: client.dueDate || '',
-                    status: client.status || 'aldia',
-                    history: client.history || []
-                });
+                setFormData({ name: client.name || '', zona: client.zona || '', phone: client.phone || '', ip: client.ip || '', plan: client.plan || '', price: client.price || '', dueDate: client.dueDate || '', status: client.status || 'aldia', history: client.history || [] });
                 setEditingId(client.id);
                 setIsFormOpen(true);
             };
@@ -262,34 +167,26 @@
                 setFormData({ name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: [] });
             };
 
-            const handlePrint = () => window.print();
-
             const filteredClients = useMemo(() => {
                 return clients.filter(client => {
                     const safeName = client.name || '';
                     const safeIp = client.ip || '';
                     const nameMatch = safeName.toLowerCase().includes(searchTerm.toLowerCase());
                     const ipMatch = safeIp.includes(searchTerm);
-                    const matchesSearch = nameMatch || ipMatch;
                     const matchesFilter = filterStatus === 'todos' || client.status === filterStatus;
-                    return matchesSearch && matchesFilter;
+                    return (nameMatch || ipMatch) && matchesFilter;
                 });
             }, [clients, searchTerm, filterStatus]);
 
             const existingZones = useMemo(() => {
-                const zones = clients
-                    .map(c => c.zona)
-                    .filter(z => z && typeof z === 'string' && z.trim() !== '');
+                const zones = clients.map(c => c.zona).filter(z => z && typeof z === 'string' && z.trim() !== '');
                 return Array.from(new Set(zones)).sort();
             }, [clients]);
 
             const groupedClients = useMemo(() => {
                 const grouped = {};
                 filteredClients.forEach(client => {
-                    let zoneStr = 'Sin Zona';
-                    if (client.zona && typeof client.zona === 'string' && client.zona.trim() !== '') {
-                        zoneStr = client.zona.trim();
-                    }
+                    let zoneStr = (client.zona && typeof client.zona === 'string' && client.zona.trim() !== '') ? client.zona.trim() : 'Sin Zona';
                     if (!grouped[zoneStr]) grouped[zoneStr] = [];
                     grouped[zoneStr].push(client);
                 });
@@ -315,8 +212,7 @@
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-indigo-600">
                         <i className="fa-solid fa-circle-notch fa-spin text-4xl mb-4"></i>
-                        <p className="font-bold animate-pulse">Conectando a la nube...</p>
-                        <p className="text-xs text-slate-400 mt-2 font-bold bg-slate-200 px-3 py-1 rounded-lg">Verificando cuota de Firebase...</p>
+                        <p className="font-bold">Conectando a la nube...</p>
                     </div>
                 );
             }
@@ -325,12 +221,9 @@
                 <div className="min-h-screen flex flex-col max-w-md mx-auto bg-slate-50 shadow-2xl relative">
                     <header className="no-print bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 text-white p-6 rounded-b-[2rem] shadow-[0_10px_40px_-10px_rgba(79,70,229,0.5)] sticky top-0 z-20">
                         <div className="flex justify-between items-center mb-4">
-                            <div>
-                                <h1 className="text-2xl font-bold tracking-tight flex items-center">
-                                    <i className="fa-solid fa-wifi mr-3 text-indigo-200"></i>
-                                    WISP Control
-                                </h1>
-                            </div>
+                            <h1 className="text-2xl font-bold tracking-tight flex items-center">
+                                <i className="fa-solid fa-wifi mr-3 text-indigo-200"></i>WISP Control
+                            </h1>
                             <div className="bg-white/10 w-10 h-10 flex items-center justify-center rounded-full relative">
                                 <i className="fa-solid fa-cloud text-indigo-100"></i>
                                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full border-2 border-indigo-700"></span>
@@ -338,12 +231,12 @@
                         </div>
                         <div className="grid grid-cols-2 gap-3 mt-2">
                             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 relative overflow-hidden">
-                                <i className="fa-solid fa-users absolute -right-2 -bottom-2 text-5xl text-white opacity-5"></i>
+                                <i className={"fa-solid fa-users absolute -right-2 -bottom-2 text-5xl text-white opacity-5"}></i>
                                 <span className="text-[10px] uppercase font-bold text-indigo-200 block mb-1 relative z-10">Clientes</span>
                                 <div className="text-2xl font-black relative z-10">{stats.total}</div>
                             </div>
                             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-orange-200 relative overflow-hidden">
-                                <i className="fa-solid fa-hand-holding-dollar absolute -right-2 -bottom-2 text-5xl text-white opacity-5"></i>
+                                <i className={"fa-solid fa-wallet absolute -right-2 -bottom-2 text-5xl text-white opacity-5"}></i>
                                 <span className="text-[10px] uppercase font-bold text-indigo-200 block mb-1 relative z-10">Por Cobrar</span>
                                 <div className="text-2xl font-black relative z-10">{stats.pendientes}</div>
                             </div>
@@ -354,25 +247,11 @@
                         <div className="space-y-3 mb-6">
                             <div className="relative">
                                 <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                <input 
-                                    type="text" 
-                                    placeholder="Buscar por nombre o IP..." 
-                                    className="w-full bg-slate-100/80 border border-transparent focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl py-4 pl-12 pr-4 shadow-sm outline-none text-slate-700 transition-all duration-300"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
+                                <input type="text" placeholder="Buscar por nombre o IP..." className="w-full bg-slate-100/80 border border-transparent focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 rounded-2xl py-4 pl-12 pr-4 shadow-sm outline-none text-slate-700 transition-all duration-300" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
                             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                                 {['todos', 'aldia', 'pendiente', 'cortado'].map((status) => (
-                                    <button 
-                                        key={status}
-                                        onClick={() => setFilterStatus(status)}
-                                        className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
-                                            filterStatus === status 
-                                            ? 'bg-indigo-600 text-white shadow-md' 
-                                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
-                                        }`}
-                                    >
+                                    <button key={status} onClick={() => setFilterStatus(status)} className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${filterStatus === status ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'}`}>
                                         {status === 'todos' ? 'Todos' : status === 'aldia' ? 'Al día' : status === 'pendiente' ? 'Pendientes' : 'Cortados'}
                                     </button>
                                 ))}
@@ -382,7 +261,7 @@
                         <div className="space-y-6 relative">
                             {filteredClients.length === 0 && (
                                 <div className="text-center py-10 text-slate-400">
-                                    <i className="fa-solid fa-cloud text-4xl mb-3 opacity-50"></i>
+                                    <i className="fa-solid fa-folder-open text-4xl mb-3 opacity-50"></i>
                                     <p>No se encontraron clientes.</p>
                                 </div>
                             )}
@@ -403,16 +282,12 @@
                                                     <div>
                                                         <div className="flex items-center gap-2 mb-1">
                                                             <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name || 'Sin Nombre'}</h3>
-                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${
-                                                                client.status === 'aldia' ? 'bg-emerald-100 text-emerald-700' : 
-                                                                client.status === 'pendiente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                                                            }`}>
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${client.status === 'aldia' ? 'bg-emerald-100 text-emerald-700' : client.status === 'pendiente' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
                                                                 {client.status === 'aldia' ? 'Al Día' : client.status === 'pendiente' ? 'Pendiente' : 'Cortado'}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center text-slate-400 text-xs">
-                                                            <i className="fa-solid fa-phone mr-1.5 text-[10px]"></i>
-                                                            {client.phone || 'Sin Teléfono'}
+                                                            <i className="fa-solid fa-phone mr-1.5 text-[10px]"></i>{client.phone || 'Sin Teléfono'}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -429,18 +304,17 @@
 
                                                 <div className="flex justify-between items-center pt-3 border-t border-slate-50 relative">
                                                     <div className={`flex items-center font-bold ${client.status === 'aldia' ? 'text-slate-400' : 'text-indigo-600'}`}>
-                                                        <i className="fa-solid fa-dollar-sign mr-1"></i>
-                                                        {client.price ? Number(client.price).toLocaleString('es-CO') : '0'}
+                                                        <i className="fa-solid fa-dollar-sign mr-1"></i>{client.price ? Number(client.price).toLocaleString('es-CO') : '0'}
                                                     </div>
                                                     
-                                                    <div className="flex gap-2">
-                                                        {(client.status === 'pendiente' || client.status === 'cortado') && (
-                                                            <button onClick={() => handleWhatsApp(client)} className="w-10 h-10 flex items-center justify-center bg-green-50 text-green-600 hover:bg-green-100 rounded-xl transition-colors" title="Notificar por WhatsApp">
+                                                    <div className="flex gap-2 relative">
+                                                        {(client.status === 'pendiente' || client.status === 'cortado') ? (
+                                                            <button onClick={() => handleWhatsApp(client)} className="w-10 h-10 flex items-center justify-center bg-green-50 text-green-600 hover:bg-green-100 rounded-xl transition-colors">
                                                                 <i className="fa-brands fa-whatsapp text-lg"></i>
                                                             </button>
-                                                        )}
+                                                        ) : null}
                                                         
-                                                        <button onClick={() => handleRenew(client)} className="w-10 h-10 flex items-center justify-center bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-colors" title="Registrar Pago y Renovar">
+                                                        <button onClick={() => handleRenew(client)} className="w-10 h-10 flex items-center justify-center bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-colors">
                                                             <i className="fa-solid fa-hand-holding-dollar text-lg"></i>
                                                         </button>
 
@@ -448,10 +322,10 @@
                                                             <i className="fa-solid fa-ellipsis-vertical text-lg"></i>
                                                         </button>
 
-                                                        {openMenuId === client.id && (
-                                                            <>
-                                                                <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)}></div>
-                                                                <div className="absolute right-0 bottom-14 mt-2 w-44 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 py-2 z-20 flex flex-col overflow-hidden animate-fade-in">
+                                                        {openMenuId === client.id ? (
+                                                            <div className="absolute right-0 bottom-14 z-50">
+                                                                <div className="fixed inset-0" onClick={() => setOpenMenuId(null)}></div>
+                                                                <div className="relative mt-2 w-44 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 py-2 flex flex-col overflow-hidden animate-fade-in">
                                                                     <button onClick={() => { setHistoryClient(client); setOpenMenuId(null); }} className="flex items-center px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left font-medium">
                                                                         <i className="fa-solid fa-clock-rotate-left w-6 text-blue-500"></i> Historial
                                                                     </button>
@@ -465,8 +339,8 @@
                                                                         <i className="fa-solid fa-trash w-6 text-rose-500"></i> Borrar Cliente
                                                                     </button>
                                                                 </div>
-                                                            </>
-                                                        )}
+                                                            </div>
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             </div>
@@ -478,35 +352,24 @@
                     </main>
 
                     <div className="no-print fixed bottom-8 left-1/2 -translate-x-1/2 flex justify-center w-full max-w-md px-6 z-30">
-                        <button 
-                            onClick={() => setIsFormOpen(true)}
-                            className="bg-indigo-600 text-white w-full py-4 rounded-2xl shadow-[0_10px_20px_-10px_rgba(79,70,229,0.8)] font-bold text-lg flex items-center justify-center active:scale-95 transition-transform"
-                        >
+                        <button onClick={() => setIsFormOpen(true)} className="bg-indigo-600 text-white w-full py-4 rounded-2xl shadow-[0_10px_20px_-10px_rgba(79,70,229,0.8)] font-bold text-lg flex items-center justify-center active:scale-95 transition-transform">
                             <i className="fa-solid fa-plus mr-3"></i> Nuevo Cliente
                         </button>
                     </div>
 
-                    {/* MODALES OMITIDOS PARA BREVEDAD (RECIBO, FORMULARIO, HISTORIAL) SON EXACTAMENTE IGUALES AL CÓDIGO ANTERIOR */}
-                    {/* MODAL FORMULARIO */}
-                    {isFormOpen && (
+                    {isFormOpen ? (
                         <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
                             <div className="bg-white w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center mb-8">
                                     <h2 className="text-2xl font-black text-slate-800">{editingId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2>
-                                    <button onClick={closeForm} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors">
-                                        <i className="fa-solid fa-xmark text-lg"></i>
-                                    </button>
+                                    <button onClick={closeForm} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors"><i className="fa-solid fa-xmark text-lg"></i></button>
                                 </div>
                                 <form onSubmit={handleSubmit} className="space-y-5">
                                     <input required name="name" value={formData.name} onChange={handleInputChange} placeholder="Nombre del cliente" type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                    
                                     <div className="relative">
                                         <input name="zona" list="zonas-list" value={formData.zona} onChange={handleInputChange} placeholder="Zona o Vereda (Opcional)" type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
-                                        <datalist id="zonas-list">
-                                            {existingZones.map(z => <option key={z} value={z} />)}
-                                        </datalist>
+                                        <datalist id="zonas-list">{existingZones.map(z => <option key={z} value={z} />)}</datalist>
                                     </div>
-
                                     <div className="grid grid-cols-2 gap-4">
                                         <input required name="phone" value={formData.phone} onChange={handleInputChange} placeholder="Teléfono" type="tel" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
                                         <input required name="ip" placeholder="IP Antena" value={formData.ip} onChange={handleInputChange} type="text" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
@@ -518,48 +381,32 @@
                                     <div className="grid grid-cols-2 gap-4">
                                         <input required name="dueDate" value={formData.dueDate} onChange={handleInputChange} type="date" className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700" />
                                         <select name="status" value={formData.status} onChange={handleInputChange} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 outline-none focus:border-indigo-500 transition-all text-slate-700">
-                                            <option value="aldia">✅ Al día</option>
-                                            <option value="pendiente">⏳ Pendiente</option>
-                                            <option value="cortado">❌ Cortado</option>
+                                            <option value="aldia">✅ Al día</option><option value="pendiente">⏳ Pendiente</option><option value="cortado">❌ Cortado</option>
                                         </select>
                                     </div>
-                                    <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl shadow-xl hover:bg-indigo-700 transition-colors mt-6">
-                                        {editingId ? 'Guardar Cambios' : 'Registrar Cliente'}
-                                    </button>
+                                    <button type="submit" className="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl shadow-xl hover:bg-indigo-700 transition-colors mt-6">{editingId ? 'Guardar Cambios' : 'Registrar Cliente'}</button>
                                 </form>
                             </div>
                         </div>
-                    )}
+                    ) : null}
 
-                    {/* MODAL HISTORIAL DE PAGOS */}
-                    {historyClient && (
+                    {historyClient ? (
                         <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl max-h-[80vh] flex flex-col">
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-black text-slate-800">Historial Pagos</h2>
-                                    <button onClick={() => setHistoryClient(null)} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors shrink-0">
-                                        <i className="fa-solid fa-xmark text-lg"></i>
-                                    </button>
+                                    <button onClick={() => setHistoryClient(null)} className="bg-slate-100 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 transition-colors shrink-0"><i className="fa-solid fa-xmark text-lg"></i></button>
                                 </div>
                                 <p className="text-slate-500 text-sm mb-4 font-bold">{historyClient.name || 'Sin Nombre'}</p>
-                                
                                 <div className="overflow-y-auto flex-1 pr-2 no-scrollbar">
                                     {(!historyClient.history || historyClient.history.length === 0) ? (
-                                        <div className="text-center py-8 text-slate-400">
-                                            <i className="fa-solid fa-folder-open text-3xl mb-3 opacity-30"></i>
-                                            <p className="text-sm">No hay pagos registrados aún.</p>
-                                        </div>
+                                        <div className="text-center py-8 text-slate-400"><i className="fa-solid fa-folder-open text-3xl mb-3 opacity-30"></i><p className="text-sm">No hay pagos registrados aún.</p></div>
                                     ) : (
                                         <ul className="space-y-3">
                                             {[...historyClient.history].reverse().map((h, index) => (
                                                 <li key={index} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                                    <div>
-                                                        <p className="font-bold text-slate-700 text-sm">Corte: {h.periodCovered}</p>
-                                                        <p className="text-xs text-slate-400 mt-0.5">Pagado: {h.date}</p>
-                                                    </div>
-                                                    <span className="text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded-lg">
-                                                        +${Number(h.amount).toLocaleString('es-CO')}
-                                                    </span>
+                                                    <div><p className="font-bold text-slate-700 text-sm">Corte: {h.periodCovered}</p><p className="text-xs text-slate-400 mt-0.5">Pagado: {h.date}</p></div>
+                                                    <span className="text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded-lg">+${Number(h.amount).toLocaleString('es-CO')}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -567,77 +414,45 @@
                                 </div>
                             </div>
                         </div>
-                    )}
+                    ) : null}
 
-                    {/* MODAL RECIBO */}
-                    {receiptClient && (
+                    {receiptClient ? (
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print-area">
                             <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl print-shadow-none print:w-full print:max-w-none print:p-0">
                                 <div className="text-center border-b border-slate-100 pb-6 mb-6">
-                                    <div className="no-print w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i className="fa-solid fa-receipt text-2xl"></i>
-                                    </div>
+                                    <div className="no-print w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4"><i className="fa-solid fa-receipt text-2xl"></i></div>
                                     <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Estado de Cuenta</h2>
                                     <p className="text-slate-400 text-sm mt-1">{todayDate}</p>
                                 </div>
                                 <div className="space-y-4 mb-8">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Cliente</span>
-                                        <span className="font-bold text-slate-700 text-right">{receiptClient.name || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Identificación (IP)</span>
-                                        <span className="font-medium text-slate-700">{receiptClient.ip || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-400 text-sm">Plan Contratado</span>
-                                        <span className="font-medium text-slate-700">{receiptClient.plan || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center border-t border-slate-100 pt-4">
-                                        <span className="text-slate-400 text-sm">Estado Actual</span>
-                                        <span className={`font-bold ${
-                                            receiptClient.status === 'aldia' ? 'text-emerald-500' : 
-                                            receiptClient.status === 'pendiente' ? 'text-amber-500' : 'text-rose-500'
-                                        }`}>
-                                            {receiptClient.status === 'aldia' ? '✅ AL DÍA' : receiptClient.status === 'pendiente' ? '⏳ PENDIENTE' : '❌ CORTADO'}
-                                        </span>
-                                    </div>
+                                    <div className="flex justify-between items-center"><span className="text-slate-400 text-sm">Cliente</span><span className="font-bold text-slate-700 text-right">{receiptClient.name || 'N/A'}</span></div>
+                                    <div className="flex justify-between items-center"><span className="text-slate-400 text-sm">Identificación (IP)</span><span className="font-medium text-slate-700">{receiptClient.ip || 'N/A'}</span></div>
+                                    <div className="flex justify-between items-center"><span className="text-slate-400 text-sm">Plan Contratado</span><span className="font-medium text-slate-700">{receiptClient.plan || 'N/A'}</span></div>
+                                    <div className="flex justify-between items-center border-t border-slate-100 pt-4"><span className="text-slate-400 text-sm">Estado Actual</span><span className={`font-bold ${receiptClient.status === 'aldia' ? 'text-emerald-500' : receiptClient.status === 'pendiente' ? 'text-amber-500' : 'text-rose-500'}`}>{receiptClient.status === 'aldia' ? '✅ AL DÍA' : receiptClient.status === 'pendiente' ? '⏳ PENDIENTE' : '❌ CORTADO'}</span></div>
                                 </div>
                                 <div className="bg-slate-50 p-6 rounded-2xl print:bg-transparent print:border print:border-slate-200 print:p-4">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-slate-500 font-bold uppercase text-sm">Saldo a Pagar</span>
-                                        <span className="text-2xl font-black text-indigo-600">
-                                            ${receiptClient.status === 'aldia' ? '0' : (receiptClient.price ? Number(receiptClient.price).toLocaleString('es-CO') : '0')}
-                                        </span>
-                                    </div>
-                                    {receiptClient.status === 'aldia' && (
-                                        <div className="text-center text-xs font-medium text-emerald-600 bg-emerald-100 py-2 rounded-lg mt-3 print:border print:border-emerald-200">
-                                            Servicio cubierto. Próximo corte: {receiptClient.dueDate}
-                                        </div>
-                                    )}
+                                    <div className="flex justify-between items-center mb-2"><span className="text-slate-500 font-bold uppercase text-sm">Saldo a Pagar</span><span className="text-2xl font-black text-indigo-600">${receiptClient.status === 'aldia' ? '0' : (receiptClient.price ? Number(receiptClient.price).toLocaleString('es-CO') : '0')}</span></div>
+                                    {receiptClient.status === 'aldia' && (<div className="text-center text-xs font-medium text-emerald-600 bg-emerald-100 py-2 rounded-lg mt-3 print:border print:border-emerald-200">Servicio cubierto. Próximo corte: {receiptClient.dueDate}</div>)}
                                 </div>
                                 <div className="no-print flex gap-3 mt-8">
-                                    <button onClick={() => setReceiptClient(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-transform">
-                                        Cerrar
-                                    </button>
-                                    <button onClick={handlePrint} className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-[0_10px_20px_-10px_rgba(79,70,229,0.8)] active:scale-95 transition-transform flex items-center justify-center">
-                                        <i className="fa-solid fa-print mr-2"></i> Imprimir
-                                    </button>
+                                    <button onClick={() => setReceiptClient(null)} className="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-xl active:scale-95 transition-transform">Cerrar</button>
+                                    <button onClick={handlePrint} className="flex-1 py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-[0_10px_20px_-10px_rgba(79,70,229,0.8)] active:scale-95 transition-transform flex items-center justify-center"><i className="fa-solid fa-print mr-2"></i> Imprimir</button>
                                 </div>
                             </div>
                         </div>
-                    )}
+                    ) : null}
                     <div className="no-print safe-area-bottom h-20"></div>
                 </div>
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(
-            <ErrorBoundary>
-                <App />
-            </ErrorBoundary>
-        );
+        try {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        } catch(error) {
+            console.error("Error al renderizar App:", error);
+            document.getElementById('root').innerHTML = `<div style="text-align:center; padding:40px; color:red;">Error interno: ${error.message}</div>`;
+        }
     </script>
 </body>
 </html>
