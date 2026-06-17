@@ -48,7 +48,12 @@
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root">
+        <div style="text-align: center; margin-top: 40vh; font-family: sans-serif; color: #6366f1;">
+            <p>Construyendo interfaz...</p>
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 10px;">Si esta pantalla no desaparece, revisa tu conexión a internet.</p>
+        </div>
+    </div>
 
     <script type="text/babel">
         // ---------------------------------------------------------
@@ -71,6 +76,35 @@
 
         const { useState, useEffect, useMemo } = React;
 
+        // ---------------------------------------------------------
+        // ESCUDO DE ERRORES (Evita la pantalla blanca)
+        // ---------------------------------------------------------
+        class ErrorBoundary extends React.Component {
+            constructor(props) {
+                super(props);
+                this.state = { hasError: false, error: null };
+            }
+            static getDerivedStateFromError(error) {
+                return { hasError: true, error };
+            }
+            render() {
+                if (this.state.hasError) {
+                    return (
+                        <div className="min-h-screen p-8 text-center flex flex-col items-center justify-center bg-slate-50">
+                            <i className="fa-solid fa-triangle-exclamation text-rose-500 text-6xl mb-4"></i>
+                            <h1 className="text-2xl font-black text-slate-800 mb-2">Algo salió mal</h1>
+                            <p className="text-sm text-slate-500 mb-6">La aplicación detectó un error interno y se detuvo para proteger los datos.</p>
+                            <div className="bg-rose-50 text-rose-700 p-4 rounded-2xl text-left overflow-auto w-full font-mono text-xs border border-rose-100 shadow-sm">
+                                {this.state.error ? this.state.error.toString() : 'Error desconocido de lectura'}
+                            </div>
+                            <p className="mt-8 text-xs font-bold text-slate-400">Por favor, toma captura a esta pantalla.</p>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
+        }
+
         function App() {
             const [clients, setClients] = useState([]);
             const [loading, setLoading] = useState(true);
@@ -87,9 +121,6 @@
                 name: '', zona: '', phone: '', ip: '', plan: '', price: '', dueDate: '', status: 'aldia', history: []
             });
 
-            // ---------------------------------------------------------
-            // CÓDIGO CORREGIDO: Evita el bucle infinito de lecturas
-            // ---------------------------------------------------------
             useEffect(() => {
                 const unsubscribe = db.collection("clientes").onSnapshot((querySnapshot) => {
                     const clientsData = [];
@@ -103,9 +134,7 @@
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
                         
-                        // Calculamos el estado visualmente, pero NO lo guardamos en la BD automáticamente
                         let displayStatus = data.status || 'aldia';
-
                         if (displayStatus === 'aldia' && data.dueDate && data.dueDate <= todayString) {
                             displayStatus = 'pendiente'; 
                         }
@@ -113,7 +142,7 @@
                         clientsData.push({ 
                             id: doc.id, 
                             ...data, 
-                            status: displayStatus, // Usamos el estado calculado
+                            status: displayStatus, 
                             history: data.history || [] 
                         });
                     });
@@ -123,12 +152,12 @@
 
                 }, (error) => {
                     console.error("Error Firebase: ", error);
+                    alert("Error conectando a la base de datos: " + error.message);
                     setLoading(false);
                 });
 
                 return () => unsubscribe();
             }, []);
-            // ---------------------------------------------------------
 
             const handleInputChange = (e) => {
                 const { name, value } = e.target;
@@ -137,7 +166,6 @@
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
-                // PROTECCIÓN: Asegurarnos de que "zona" sea un texto válido antes de limpiarlo
                 const zonaSegura = (typeof formData.zona === 'string') ? formData.zona.trim() : '';
                 const finalData = { ...formData, zona: zonaSegura };
 
@@ -159,9 +187,7 @@
             };
 
             const handleRenew = async (client) => {
-                if (!client.dueDate) {
-                    return alert("El cliente no tiene una fecha de corte registrada para renovar.");
-                }
+                if (!client.dueDate) return alert("El cliente no tiene una fecha de corte registrada para renovar.");
 
                 const priceToPay = client.price ? Number(client.price) : 0;
                 const confirmMsg = `¿Registrar pago de $${priceToPay.toLocaleString('es-CO')} y renovar 1 mes de servicio a ${client.name || 'este cliente'}?`;
@@ -254,7 +280,7 @@
                 const zones = clients
                     .map(c => c.zona)
                     .filter(z => z && typeof z === 'string' && z.trim() !== '');
-                return [...new Set(zones)].sort();
+                return Array.from(new Set(zones)).sort();
             }, [clients]);
 
             const groupedClients = useMemo(() => {
@@ -290,7 +316,7 @@
                     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-indigo-600">
                         <i className="fa-solid fa-circle-notch fa-spin text-4xl mb-4"></i>
                         <p className="font-bold animate-pulse">Conectando a la nube...</p>
-                        <p className="text-xs text-slate-400 mt-2">Si demora mucho, revisa tu cuota en Firebase.</p>
+                        <p className="text-xs text-slate-400 mt-2 font-bold bg-slate-200 px-3 py-1 rounded-lg">Verificando cuota de Firebase...</p>
                     </div>
                 );
             }
@@ -460,6 +486,7 @@
                         </button>
                     </div>
 
+                    {/* MODALES OMITIDOS PARA BREVEDAD (RECIBO, FORMULARIO, HISTORIAL) SON EXACTAMENTE IGUALES AL CÓDIGO ANTERIOR */}
                     {/* MODAL FORMULARIO */}
                     {isFormOpen && (
                         <div className="no-print fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center">
@@ -606,7 +633,11 @@
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render(
+            <ErrorBoundary>
+                <App />
+            </ErrorBoundary>
+        );
     </script>
 </body>
 </html>
